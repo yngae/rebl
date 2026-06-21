@@ -1,8 +1,13 @@
 [phases.setup]
-nixPkgs = ["python310", "python310Packages.pip", "chromium", "chromedriver"]
+nixPkgs = ["python310", "python310Packages.pip", "python310Packages.virtualenv", "chromium", "chromedriver"]
 
 [phases.install]
-cmds = ["pip install -r requirements.txt"]
+cmds = [
+  "python -m venv .venv",
+  "source .venv/bin/activate",
+  "pip install --upgrade pip",
+  "pip install -r requirements.txt"
+]
 
-[start]
-cmd = "python app.py"
+[phases.start]
+cmd = "source .venv/bin/activate && python app.py"

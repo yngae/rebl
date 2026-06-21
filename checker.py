@@ -1,4 +1,5 @@
 # checker.py - Modified to remove auto-install
+# checker.py - Fixed version without distutils
 import os
 import sys
 import json
@@ -14,8 +15,16 @@ from typing import Dict, List, Optional, Tuple, Any
 from enum import Enum
 from dataclasses import dataclass, field
 
-# REMOVED the install_dependencies() function and auto-install
+# Add this to handle missing distutils in Python 3.12+
+try:
+    import distutils
+except ImportError:
+    # Create dummy distutils module
+    import types
+    distutils = types.ModuleType('distutils')
+    sys.modules['distutils'] = distutils
 
+# Now import selenium and other dependencies
 try:
     from selenium import webdriver
     from selenium.webdriver.common.by import By
@@ -36,7 +45,6 @@ try:
 except ImportError as e:
     print(f"[-] Missing dependency: {e}")
     print("[!] Please install: pip install -r requirements.txt")
-    # Re-raise so the app knows dependencies are missing
     raise
 
 @dataclass

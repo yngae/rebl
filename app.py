@@ -1,4 +1,4 @@
-# app.py - Fixed to work with your full checker
+# app.py - Updated with distutils fix
 import os
 import sys
 import json
@@ -12,24 +12,20 @@ from flask_cors import CORS
 import subprocess
 import re
 
+# Fix distutils for Python 3.12+
+try:
+    import distutils
+except ImportError:
+    import types
+    distutils = types.ModuleType('distutils')
+    sys.modules['distutils'] = distutils
+
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Import checker with error handling - DISABLE auto-install
-# We'll handle dependencies in requirements.txt instead
+# Import checker with error handling
 try:
-    # Monkey patch to prevent auto-install
-    import builtins
-    original_import = builtins.__import__
-    
-    def custom_import(name, *args, **kwargs):
-        if name in ['selenium', 'undetected_chromedriver', 'webdriver_manager']:
-            # Don't auto-install, just raise ImportError
-            raise ImportError(f"{name} not available")
-        return original_import(name, *args, **kwargs)
-    
-    # Actually, just import normally - dependencies should be installed
     from checker import AntraxRblxChecker, VerificationMode, Account
     logger.info("✅ Checker imported successfully")
 except ImportError as e:
@@ -40,9 +36,10 @@ except ImportError as e:
             self.stats = {'total': 0, 'verified': 0, 'valid': 0}
             self.recent_results = []
             self.accounts = []
+            self.running = True
     class VerificationMode:
         NORMAL = "normal"
-        HEADLESS = "headless" 
+        HEADLESS = "headless"
         STEALTH = "stealth"
         RAPID = "rapid"
     class Account:
@@ -83,7 +80,6 @@ if not os.path.exists('static'):
 
 @app.route('/')
 def index():
-    """Serve the main HTML page"""
     try:
         return send_from_directory('static', 'index.html')
     except Exception as e:
@@ -92,7 +88,6 @@ def index():
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Health check endpoint"""
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now().isoformat(),
@@ -102,7 +97,6 @@ def health_check():
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
-    """Get current checker status"""
     global current_status, is_running, checker_instance
     
     try:
@@ -137,7 +131,6 @@ def get_status():
 
 @app.route('/api/start', methods=['POST'])
 def start_checker():
-    """Start the checker"""
     global checker_instance, verification_thread, is_running, current_status
     
     if is_running:
@@ -155,7 +148,7 @@ def start_checker():
         with open(combo_path, 'w', encoding='utf-8') as f:
             f.write(combo_content)
         
-        # Import checker here - dependencies should already be installed
+        # Import checker here
         try:
             from checker import AntraxRblxChecker, VerificationMode
         except ImportError as e:
@@ -227,7 +220,6 @@ def start_checker():
 
 @app.route('/api/stop', methods=['POST'])
 def stop_checker():
-    """Stop the checker"""
     global checker_instance, is_running
     
     try:
@@ -240,7 +232,6 @@ def stop_checker():
 
 @app.route('/api/files', methods=['GET'])
 def list_files():
-    """List result files"""
     try:
         files = []
         result_files = ['valid_result.txt', 'cookie_result.txt', 'hits_summary.txt']
@@ -261,7 +252,6 @@ def list_files():
 
 @app.route('/api/download/<filename>', methods=['GET'])
 def download_file(filename):
-    """Download result files"""
     safe_files = ['valid_result.txt', 'cookie_result.txt', 'hits_summary.txt']
     
     if filename not in safe_files:
@@ -273,7 +263,6 @@ def download_file(filename):
     return jsonify({'error': 'File not found'}), 404
 
 def run_checker_thread():
-    """Run checker in background"""
     global checker_instance, is_running
     
     try:

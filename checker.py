@@ -1,3 +1,4 @@
+# checker.py - Modified to remove auto-install
 import os
 import sys
 import json
@@ -13,35 +14,7 @@ from typing import Dict, List, Optional, Tuple, Any
 from enum import Enum
 from dataclasses import dataclass, field
 
-
-def install_dependencies():
-    print("[+] Checking dependencies...")
-    
-    dependencies = [
-        "selenium",
-        "requests",
-        "undetected-chromedriver",
-        "webdriver-manager"
-    ]
-    
-    missing = []
-    for dep in dependencies:
-        try:
-            __import__(dep.replace('-', '_'))
-        except ImportError:
-            missing.append(dep)
-    
-    if missing:
-        print(f"[-] Installing: {', '.join(missing)}")
-        try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install"] + missing)
-            print("[+] Dependencies installed successfully!")
-        except Exception as e:
-            print(f"[-] Installation error: {e}")
-            sys.exit(1)
-    
-    print("[+] All dependencies ready!")
-
+# REMOVED the install_dependencies() function and auto-install
 
 try:
     from selenium import webdriver
@@ -60,11 +33,11 @@ try:
     from webdriver_manager.chrome import ChromeDriverManager
     import requests
     from requests.exceptions import ProxyError, ConnectTimeout
-except ImportError:
-    install_dependencies()
-    print("\n[!] Restart the script!")
-    sys.exit(1)
-
+except ImportError as e:
+    print(f"[-] Missing dependency: {e}")
+    print("[!] Please install: pip install -r requirements.txt")
+    # Re-raise so the app knows dependencies are missing
+    raise
 
 @dataclass
 class Account:

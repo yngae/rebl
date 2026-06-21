@@ -1,4 +1,4 @@
-# app.py - Fixed version for Railway
+# app.py - Fixed to work with your full checker
 import os
 import sys
 import json
@@ -16,21 +16,33 @@ import re
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Import checker with error handling
+# Import checker with error handling - DISABLE auto-install
+# We'll handle dependencies in requirements.txt instead
 try:
+    # Monkey patch to prevent auto-install
+    import builtins
+    original_import = builtins.__import__
+    
+    def custom_import(name, *args, **kwargs):
+        if name in ['selenium', 'undetected_chromedriver', 'webdriver_manager']:
+            # Don't auto-install, just raise ImportError
+            raise ImportError(f"{name} not available")
+        return original_import(name, *args, **kwargs)
+    
+    # Actually, just import normally - dependencies should be installed
     from checker import AntraxRblxChecker, VerificationMode, Account
     logger.info("✅ Checker imported successfully")
-except Exception as e:
+except ImportError as e:
     logger.error(f"❌ Failed to import checker: {e}")
-    # Create dummy class if import fails
+    # Fallback to minimal implementation
     class AntraxRblxChecker:
         def __init__(self):
-            self.stats = {}
+            self.stats = {'total': 0, 'verified': 0, 'valid': 0}
             self.recent_results = []
             self.accounts = []
     class VerificationMode:
         NORMAL = "normal"
-        HEADLESS = "headless"
+        HEADLESS = "headless" 
         STEALTH = "stealth"
         RAPID = "rapid"
     class Account:
@@ -84,7 +96,8 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now().isoformat(),
-        'is_running': is_running
+        'is_running': is_running,
+        'python_version': sys.version
     })
 
 @app.route('/api/status', methods=['GET'])
@@ -93,7 +106,7 @@ def get_status():
     global current_status, is_running, checker_instance
     
     try:
-        if checker_instance:
+        if checker_instance and hasattr(checker_instance, 'stats'):
             stats = checker_instance.stats
             current_status.update({
                 'total': stats.get('total', 0),
@@ -142,8 +155,12 @@ def start_checker():
         with open(combo_path, 'w', encoding='utf-8') as f:
             f.write(combo_content)
         
-        # Import checker here to avoid import issues
-        from checker import AntraxRblxChecker, VerificationMode
+        # Import checker here - dependencies should already be installed
+        try:
+            from checker import AntraxRblxChecker, VerificationMode
+        except ImportError as e:
+            logger.error(f"Checker import failed: {e}")
+            return jsonify({'error': f'Checker module not available: {str(e)}'}), 500
         
         # Create checker instance
         checker_instance = AntraxRblxChecker()
@@ -156,7 +173,8 @@ def start_checker():
             'rapid': VerificationMode.RAPID
         }
         
-        checker_instance.mode = mode_map.get(data.get('mode', 'headless'), VerificationMode.HEADLESS)
+        mode = data.get('mode', 'headless')
+        checker_instance.mode = mode_map.get(mode, VerificationMode.HEADLESS)
         checker_instance.max_workers = int(data.get('threads', 2))
         checker_instance.min_delay = float(data.get('min_delay', 3))
         checker_instance.max_delay = float(data.get('max_delay', 8))
@@ -204,7 +222,7 @@ def start_checker():
         })
         
     except Exception as e:
-        logger.error(f"Start error: {e}")
+        logger.error(f"Start error: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/stop', methods=['POST'])
@@ -260,9 +278,12 @@ def run_checker_thread():
     
     try:
         if checker_instance:
+            # Force headless mode for Railway
+            if hasattr(checker_instance, 'mode'):
+                checker_instance.mode = VerificationMode.HEADLESS
             checker_instance.start_verification()
     except Exception as e:
-        logger.error(f"Checker thread error: {e}")
+        logger.error(f"Checker thread error: {e}", exc_info=True)
     finally:
         is_running = False
         if checker_instance and hasattr(checker_instance, 'driver_manager'):

@@ -1,7 +1,6 @@
 {
   "build": {
-    "builder": "NIXPACKS",
-    "nixPkgs": ["python310", "python310Packages.pip", "chromium", "chromedriver"]
+    "builder": "DOCKERFILE"
   },
   "deploy": {
     "numReplicas": 1,

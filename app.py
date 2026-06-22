@@ -1,4 +1,4 @@
-# app.py - Railway Edition with warnings suppressed
+# app.py - Railway Edition with Improved Driver Creation
 
 import os
 import sys
@@ -10,7 +10,7 @@ import random
 import warnings
 from datetime import datetime
 
-# Suppress Eventlet deprecation warning
+# Suppress warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 import logging
@@ -33,48 +33,101 @@ try:
     print("[+] ✅ Successfully loaded AntraxRblxChecker from wf.py")
 except ImportError as e:
     print(f"[-] ❌ Error importing from wf.py: {e}")
-    print("[!] Make sure wf.py is in the same directory")
     sys.exit(1)
 
 # ============================================================
-# PATCH DRIVER MANAGER FOR RAILWAY
+# IMPROVED DRIVER PATCH FOR RAILWAY
 # ============================================================
 try:
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options
     from selenium.webdriver.chrome.service import Service
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
     from wf import DriverManager
     
     def railway_create_driver(self, proxy=None, worker_id=0):
+        """Improved driver creation for Railway"""
         try:
             print(f"[DRIVER] Creating driver for worker {worker_id}")
             
             options = Options()
+            
+            # More robust headless options for Railway
             options.add_argument("--headless=new")
             options.add_argument("--no-sandbox")
             options.add_argument("--disable-dev-shm-usage")
             options.add_argument("--disable-gpu")
             options.add_argument("--window-size=1920,1080")
             options.add_argument("--disable-blink-features=AutomationControlled")
+            options.add_argument("--disable-extensions")
+            options.add_argument("--disable-plugins")
+            options.add_argument("--disable-images")
+            options.add_argument("--disable-javascript")
+            options.add_argument("--ignore-certificate-errors")
+            options.add_argument("--disable-crash-reporter")
+            options.add_argument("--disable-notifications")
+            options.add_argument("--disable-popup-blocking")
+            options.add_argument("--disable-infobars")
+            options.add_argument("--disable-background-timer-throttling")
+            options.add_argument("--disable-backgrounding-occluded-windows")
+            options.add_argument("--disable-renderer-backgrounding")
+            options.add_argument("--disable-ipc-flooding-protection")
+            options.add_argument("--disable-hang-monitor")
+            options.add_argument("--disable-browser-side-navigation")
+            
+            # User agent to avoid detection
+            options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            
             options.add_experimental_option("excludeSwitches", ["enable-automation"])
             options.add_experimental_option('useAutomationExtension', False)
             
+            # Set Chrome binary
             chrome_bin = '/usr/bin/google-chrome'
             if os.path.exists(chrome_bin):
                 options.binary_location = chrome_bin
+                print(f"[DRIVER] Using Chrome: {chrome_bin}")
+            else:
+                # Try to find Chrome
+                try:
+                    import subprocess
+                    result = subprocess.run(['which', 'google-chrome'], capture_output=True, text=True)
+                    if result.stdout:
+                        chrome_bin = result.stdout.strip()
+                        options.binary_location = chrome_bin
+                        print(f"[DRIVER] Found Chrome at: {chrome_bin}")
+                except:
+                    pass
             
             if proxy:
                 options.add_argument(f'--proxy-server={proxy}')
             
+            # Set ChromeDriver
             chromedriver_path = '/usr/bin/chromedriver'
             if os.path.exists(chromedriver_path):
                 service = Service(executable_path=chromedriver_path)
+                print(f"[DRIVER] Using ChromeDriver: {chromedriver_path}")
             else:
-                service = Service()
+                try:
+                    import subprocess
+                    result = subprocess.run(['which', 'chromedriver'], capture_output=True, text=True)
+                    if result.stdout:
+                        chromedriver_path = result.stdout.strip()
+                        service = Service(executable_path=chromedriver_path)
+                        print(f"[DRIVER] Found ChromeDriver at: {chromedriver_path}")
+                    else:
+                        service = Service()
+                except:
+                    service = Service()
             
+            # Create driver with longer timeouts
             driver = webdriver.Chrome(service=service, options=options)
-            driver.set_page_load_timeout(30)
+            driver.set_page_load_timeout(60)  # Increased timeout
+            driver.set_script_timeout(60)
+            driver.implicitly_wait(10)
             
+            # Store driver
             driver_id = f"worker_{worker_id}"
             self.active_drivers[driver_id] = driver
             self.usage_count[driver_id] = 1
@@ -98,7 +151,6 @@ except Exception as e:
 app = Flask(__name__)
 CORS(app)
 
-# Use threading mode to avoid Eventlet warnings
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # Global state
@@ -199,7 +251,7 @@ def start_checker():
                 ))
     
     if not accounts:
-        return jsonify({'error': 'No valid accounts found (format: user:pass)'}), 400
+        return jsonify({'error': 'No valid accounts found'}), 400
     
     proxies = []
     if proxy_text:
@@ -465,5 +517,5 @@ if __name__ == '__main__':
         port=port,
         debug=False,
         use_reloader=False,
-        allow_unsafe_werkzeug=True  # <-- ADD THIS
+        allow_unsafe_werkzeug=True
     )

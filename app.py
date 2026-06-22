@@ -1,4 +1,4 @@
-# app.py - Full updated version for Railway
+# app.py - Complete version for web display
 import os
 import sys
 import json
@@ -31,27 +31,18 @@ try:
     logger.info("Checker imported successfully")
 except ImportError as e:
     logger.error(f"Failed to import checker: {e}")
-    # Fallback classes
     class AntraxRblxChecker:
         def __init__(self):
             self.stats = {'total': 0, 'verified': 0, 'valid': 0, 'recent_results': []}
             self.recent_results = []
+            self.web_results = []
             self.accounts = []
             self.running = True
-            self.mode = None
-            self.min_delay = 2
-            self.max_delay = 5
-            self.max_workers = 1
-            self.max_accounts_per_test = 999999
         def load_accounts(self, path): return False
         def load_proxies(self, path): return False
         def start_verification_simple(self): pass
-        def start_verification(self): pass
     class VerificationMode:
         HEADLESS = "headless"
-        NORMAL = "normal"
-        STEALTH = "stealth"
-        RAPID = "rapid"
     class Account:
         pass
 
@@ -77,7 +68,8 @@ current_status = {
     'driver_error': 0,
     'other_errors': 0,
     'start_time': None,
-    'recent_results': []
+    'recent_results': [],
+    'web_results': []
 }
 
 # Create directories
@@ -103,17 +95,16 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now().isoformat(),
-        'is_running': is_running,
-        'python_version': sys.version
+        'is_running': is_running
     })
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
-    """Get current checker status"""
+    """Get current checker status with web results"""
     global current_status, is_running, checker_instance
     
     try:
-        if checker_instance and hasattr(checker_instance, 'stats'):
+        if checker_instance:
             stats = checker_instance.stats
             current_status.update({
                 'total': stats.get('total', 0),
@@ -130,7 +121,8 @@ def get_status():
                 'driver_error': stats.get('driver_error', 0),
                 'other_errors': stats.get('other_errors', 0),
                 'start_time': stats.get('start_time'),
-                'recent_results': checker_instance.recent_results[-10:] if checker_instance.recent_results else []
+                'recent_results': checker_instance.recent_results[-10:] if checker_instance.recent_results else [],
+                'web_results': checker_instance.web_results[-50:] if hasattr(checker_instance, 'web_results') else []
             })
         
         return jsonify({
@@ -140,7 +132,6 @@ def get_status():
         })
     except Exception as e:
         logger.error(f"Status error: {e}")
-        logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/start', methods=['POST'])
@@ -215,7 +206,8 @@ def start_checker():
             'driver_error': 0,
             'other_errors': 0,
             'start_time': time.time(),
-            'recent_results': []
+            'recent_results': [],
+            'web_results': []
         }
         
         # Start in background
@@ -250,6 +242,33 @@ def stop_checker():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/results', methods=['GET'])
+def get_results():
+    """Get all web results"""
+    global checker_instance
+    
+    try:
+        if checker_instance and hasattr(checker_instance, 'web_results'):
+            return jsonify({
+                'results': checker_instance.web_results[-100:],
+                'total': len(checker_instance.web_results)
+            })
+        return jsonify({'results': [], 'total': 0})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/clear', methods=['POST'])
+def clear_results():
+    """Clear web results"""
+    global checker_instance
+    
+    try:
+        if checker_instance and hasattr(checker_instance, 'web_results'):
+            checker_instance.web_results = []
+        return jsonify({'success': True, 'message': 'Results cleared'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/files', methods=['GET'])
 def list_files():
     """List result files"""
@@ -269,7 +288,6 @@ def list_files():
         
         return jsonify({'files': files})
     except Exception as e:
-        logger.error(f"Files list error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/download/<filename>', methods=['GET'])
@@ -291,11 +309,9 @@ def run_checker_thread():
     
     try:
         if checker_instance:
-            # Use the simple verification method for web
             if hasattr(checker_instance, 'start_verification_simple'):
                 checker_instance.start_verification_simple()
             else:
-                # Fallback to regular method
                 checker_instance.start_verification()
             logger.info("Checker verification completed")
     except Exception as e:

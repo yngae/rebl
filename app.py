@@ -443,13 +443,22 @@ if __name__ == '__main__':
     print("[+] 📊 Using original AntraxRblxChecker engine")
     print("[+] ⚡ Railway-optimized configuration")
     
-    # Run with eventlet for production
-    socketio.run(
-        app,
-        host='0.0.0.0',
-        port=port,
-        debug=False,
-        use_reloader=False,
-        log_output=False,
-        allow_unsafe_werkzeug=False
-    )
+    # Run with eventlet for production (removed allow_unsafe_werkzeug)
+    try:
+        socketio.run(
+            app,
+            host='0.0.0.0',
+            port=port,
+            debug=False,
+            use_reloader=False,
+            log_output=False
+        )
+    except TypeError:
+        # Fallback for older versions
+        socketio.run(
+            app,
+            host='0.0.0.0',
+            port=port,
+            debug=False,
+            use_reloader=False
+        )

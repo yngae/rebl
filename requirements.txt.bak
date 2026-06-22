@@ -1,8 +1,0 @@
-Flask==2.3.2
-Flask-CORS==4.0.0
-selenium==4.11.2
-requests==2.31.0
-undetected-chromedriver==3.5.2
-webdriver-manager==3.9.1
-setuptools==68.0.0
-wheel==0.41.0

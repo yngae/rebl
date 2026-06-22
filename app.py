@@ -1,4 +1,4 @@
-# app.py - Web Interface for Roblox Account Checker
+# app.py - Web Interface for Roblox Account Checker (Railway Compatible)
 
 import os
 import sys
@@ -17,7 +17,20 @@ from wf import AntraxRblxChecker, Account
 
 app = Flask(__name__)
 CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+
+# Configure for production
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-here')
+
+# SocketIO with production settings
+socketio = SocketIO(
+    app, 
+    cors_allowed_origins="*", 
+    async_mode='eventlet',
+    ping_timeout=60,
+    ping_interval=25,
+    logger=False,
+    engineio_logger=False
+)
 
 # Global state
 checker_state = {
@@ -64,7 +77,11 @@ def add_log(message, level='info'):
     checker_state['logs'].append(log_entry)
     if len(checker_state['logs']) > 500:
         checker_state['logs'].pop(0)
-    socketio.emit('log', log_entry)
+    
+    try:
+        socketio.emit('log', log_entry)
+    except Exception:
+        pass
 
 def emit_socket_event(event, data):
     try:
@@ -173,7 +190,7 @@ def start_checker():
     for account in accounts:
         work_queue.put(account)
     
-    for i in range(threads):
+    for i in range(min(threads, 10)):  # Limit threads for Railway
         w = threading.Thread(
             target=checker_worker,
             args=(i+1, work_queue),
@@ -380,7 +397,17 @@ if __name__ == '__main__':
         print("[!] Make sure wf.py is in the same directory")
         sys.exit(1)
     
+    # Get port from environment variable (Railway sets this)
+    port = int(os.environ.get('PORT', 5000))
+    
     print("[+] 🚀 Starting Roblox Account Checker Web Interface")
-    print("[+] 🌐 Open http://localhost:5000 in your browser")
+    print(f"[+] 🌐 Running on port {port}")
     print("[+] 📊 Using original AntraxRblxChecker engine")
-    socketio.run(app, debug=False, host='0.0.0.0', port=5000)
+    
+    # Use eventlet for production
+    socketio.run(app, 
+                host='0.0.0.0', 
+                port=port,
+                debug=False,
+                use_reloader=False,
+                log_output=False)

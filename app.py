@@ -1,4 +1,4 @@
-# app.py - Railway Edition with Runtime Patches
+# app.py - Complete Working Version for Railway
 
 import os
 import sys
@@ -8,19 +8,16 @@ import threading
 import queue
 import random
 from datetime import datetime
+from flask import Flask, render_template, request, jsonify
+from flask_cors import CORS
+from flask_socketio import SocketIO, emit
 
-# Set Chrome paths for Railway
+# ============================================================
+# FIX CHROME FOR RAILWAY (wf.py stays original)
+# ============================================================
 os.environ['CHROME_BIN'] = '/usr/bin/google-chrome'
 os.environ['CHROMEDRIVER_PATH'] = '/usr/bin/chromedriver'
 os.environ['PATH'] = f"/usr/bin:{os.environ.get('PATH', '')}"
-
-print("=" * 70)
-print("   ATX ROBLOX CHECKER - RAILWAY EDITION")
-print("=" * 70)
-
-from flask import Flask, render_template, request, jsonify, send_from_directory
-from flask_cors import CORS
-from flask_socketio import SocketIO, emit
 
 # Import the original checker
 try:
@@ -28,143 +25,99 @@ try:
     print("[+] ✅ Successfully loaded AntraxRblxChecker from wf.py")
 except ImportError as e:
     print(f"[-] ❌ Error importing from wf.py: {e}")
-    print("[!] Make sure wf.py is in the same directory")
     sys.exit(1)
 
-# PATCH: Override the DriverManager to work on Railway
+# ============================================================
+# PATCH DRIVER MANAGER FOR RAILWAY
+# ============================================================
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 
-# Monkey patch the DriverManager class
-def patched_create_driver(self, proxy: str = None, worker_id: int = 0):
-    """Patched driver creation for Railway"""
-    try:
-        print(f"[DEBUG] Creating driver for worker {worker_id}")
-        
-        # Use environment variables for Chrome paths
-        chrome_bin = os.environ.get('CHROME_BIN', '/usr/bin/google-chrome')
-        chromedriver_path = os.environ.get('CHROMEDRIVER_PATH', '/usr/bin/chromedriver')
-        
-        print(f"[DEBUG] Chrome binary: {chrome_bin}")
-        print(f"[DEBUG] ChromeDriver: {chromedriver_path}")
-        
-        options = Options()
-        
-        # Headless mode options for Railway
-        base_args = [
-            "--headless=new",
-            "--disable-gpu",
-            "--window-size=1920,1080",
-            "--disable-blink-features=AutomationControlled",
-            "--disable-dev-shm-usage",
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--remote-debugging-port=9222",
-            "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "--log-level=3",
-            "--disable-web-security",
-            "--disable-features=IsolateOrigins,site-per-process",
-            "--disable-extensions",
-            "--disable-plugins",
-            "--disable-images",
-            "--disable-javascript",
-            "--ignore-certificate-errors",
-            "--disable-crash-reporter",
-            "--disable-notifications",
-            "--disable-popup-blocking",
-            "--disable-infobars",
-            "--disable-background-timer-throttling",
-            "--disable-backgrounding-occluded-windows",
-            "--disable-renderer-backgrounding",
-            "--disable-ipc-flooding-protection",
-            "--disable-hang-monitor",
-            "--disable-browser-side-navigation"
-        ]
-        
-        for arg in base_args:
-            options.add_argument(arg)
-        
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        options.add_experimental_option('useAutomationExtension', False)
-        
-        # Set Chrome binary
-        if os.path.exists(chrome_bin):
-            options.binary_location = chrome_bin
-            print(f"[DEBUG] Using Chrome binary: {chrome_bin}")
-        else:
-            print(f"[WARNING] Chrome binary not found at: {chrome_bin}")
-        
-        # Proxy configuration
-        if proxy:
-            options.add_argument(f'--proxy-server={proxy}')
-        
-        # Preferences
-        prefs = {
-            "credentials_enable_service": False,
-            "profile.password_manager_enabled": False,
-            "profile.default_content_setting_values.notifications": 2,
-            "intl.accept_languages": "en-US,en",
-        }
-        options.add_experimental_option("prefs", prefs)
-        
-        # Create service with chromedriver
-        if os.path.exists(chromedriver_path):
-            service = Service(executable_path=chromedriver_path)
-            print(f"[DEBUG] Using ChromeDriver: {chromedriver_path}")
-        else:
-            print(f"[WARNING] ChromeDriver not found at: {chromedriver_path}")
-            print("[DEBUG] Trying default chromedriver...")
-            service = Service()
-        
-        driver = webdriver.Chrome(service=service, options=options)
-        driver.set_page_load_timeout(30)
-        driver.set_script_timeout(30)
-        
-        print(f"[DEBUG] Driver created successfully for worker {worker_id}")
-        
-        driver_id = f"worker_{worker_id}"
-        self.active_drivers[driver_id] = driver
-        self.usage_count[driver_id] = 1
-        
-        return driver
-        
-    except Exception as e:
-        print(f"[ERROR] Failed to create driver: {e}")
-        return None
+try:
+    from wf import DriverManager
+    
+    def railway_create_driver(self, proxy=None, worker_id=0):
+        try:
+            print(f"[DRIVER] Creating driver for worker {worker_id}")
+            
+            options = Options()
+            options.add_argument("--headless=new")
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+            options.add_argument("--disable-gpu")
+            options.add_argument("--window-size=1920,1080")
+            options.add_argument("--disable-blink-features=AutomationControlled")
+            options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+            options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            options.add_experimental_option('useAutomationExtension', False)
+            
+            # Set Chrome binary
+            chrome_bin = '/usr/bin/google-chrome'
+            if os.path.exists(chrome_bin):
+                options.binary_location = chrome_bin
+                print(f"[DRIVER] Using Chrome: {chrome_bin}")
+            
+            if proxy:
+                options.add_argument(f'--proxy-server={proxy}')
+            
+            # Set ChromeDriver
+            chromedriver_path = '/usr/bin/chromedriver'
+            if os.path.exists(chromedriver_path):
+                service = Service(executable_path=chromedriver_path)
+                print(f"[DRIVER] Using ChromeDriver: {chromedriver_path}")
+            else:
+                service = Service()
+            
+            driver = webdriver.Chrome(service=service, options=options)
+            driver.set_page_load_timeout(30)
+            driver.set_script_timeout(30)
+            
+            driver_id = f"worker_{worker_id}"
+            self.active_drivers[driver_id] = driver
+            self.usage_count[driver_id] = 1
+            
+            print(f"[DRIVER] ✅ Created for worker {worker_id}")
+            return driver
+            
+        except Exception as e:
+            print(f"[DRIVER] ❌ Failed: {e}")
+            return None
+    
+    DriverManager.create_driver = railway_create_driver
+    print("[+] ✅ Patched DriverManager for Railway")
+    
+except Exception as e:
+    print(f"[-] Failed to patch DriverManager: {e}")
 
-# Apply the patch to the DriverManager class
-from wf import DriverManager
-DriverManager.create_driver = patched_create_driver
-print("[+] ✅ Patched DriverManager for Railway")
-
+# ============================================================
+# FLASK APP
+# ============================================================
 app = Flask(__name__, static_folder='static', template_folder='templates')
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'railway-secret-key-change-this')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'railway-key')
 
-# Configure CORS
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app)
 
-# SocketIO with Railway-optimized settings
+# SocketIO with proper settings
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
     async_mode='eventlet',
     ping_timeout=60,
     ping_interval=25,
-    max_http_buffer_size=1e6,
     logger=False,
-    engineio_logger=False,
-    manage_session=False
+    engineio_logger=False
 )
 
 print("[+] 🔌 SocketIO configured")
 
-# Global state
+# ============================================================
+# GLOBAL STATE
+# ============================================================
 checker_state = {
     'running': False,
     'paused': False,
     'accounts': [],
-    'results': [],
     'stats': {
         'total': 0,
         'verified': 0,
@@ -185,13 +138,15 @@ checker_state = {
     'logs': [],
     'recent_results': [],
     'current_account': None,
-    'total_accounts': 0,
     'hits': []
 }
 
 checker = None
 work_queue = queue.Queue()
 
+# ============================================================
+# HELPER FUNCTIONS
+# ============================================================
 def add_log(message, level='info'):
     """Add a log entry"""
     log_entry = {
@@ -203,24 +158,25 @@ def add_log(message, level='info'):
     if len(checker_state['logs']) > 500:
         checker_state['logs'].pop(0)
     
+    print(f"[{log_entry['time']}] [{level.upper()}] {message}")
+    
     try:
         socketio.emit('log', log_entry)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Log emit error: {e}")
 
 def emit_socket_event(event, data):
     try:
         socketio.emit(event, data)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Emit error: {e}")
 
+# ============================================================
+# ROUTES
+# ============================================================
 @app.route('/')
 def index():
     return render_template('index.html')
-
-@app.route('/static/<path:path>')
-def serve_static(path):
-    return send_from_directory('static', path)
 
 @app.route('/api/status')
 def get_status():
@@ -229,7 +185,7 @@ def get_status():
         'paused': checker_state['paused'],
         'stats': checker_state['stats'],
         'recent_results': checker_state['recent_results'][-20:],
-        'total_accounts': checker_state['total_accounts'],
+        'total_accounts': checker_state['stats']['total'],
         'current_account': checker_state['current_account'],
         'hits': checker_state['hits'][-50:]
     })
@@ -237,6 +193,8 @@ def get_status():
 @app.route('/api/start', methods=['POST'])
 def start_checker():
     global checker, work_queue
+    
+    print("[DEBUG] Start request received")
     
     if checker_state['running']:
         return jsonify({'error': 'Checker already running'}), 400
@@ -264,7 +222,7 @@ def start_checker():
                 ))
     
     if not accounts:
-        return jsonify({'error': 'No valid accounts found (format: user:pass)'}), 400
+        return jsonify({'error': 'No valid accounts found'}), 400
     
     # Parse proxies
     proxies = []
@@ -292,10 +250,6 @@ def start_checker():
     checker_state['running'] = True
     checker_state['paused'] = False
     checker_state['accounts'] = accounts
-    checker_state['results'] = []
-    checker_state['logs'] = []
-    checker_state['recent_results'] = []
-    checker_state['hits'] = []
     checker_state['stats'] = {
         'total': len(accounts),
         'verified': 0,
@@ -313,7 +267,10 @@ def start_checker():
         'speed': 0,
         'hit_rate': 0
     }
-    checker_state['total_accounts'] = len(accounts)
+    checker_state['logs'] = []
+    checker_state['recent_results'] = []
+    checker_state['hits'] = []
+    checker_state['current_account'] = None
     
     # Start worker threads
     work_queue = queue.Queue()
@@ -333,7 +290,7 @@ def start_checker():
     monitor_thread.start()
     
     add_log(f'🚀 Checker started with {len(accounts)} accounts and {len(proxies)} proxies', 'success')
-    add_log(f'⚙️ Using {max_workers} workers (limited for Railway)', 'info')
+    add_log(f'⚙️ Using {max_workers} workers', 'info')
     
     return jsonify({
         'success': True,
@@ -359,6 +316,7 @@ def checker_worker(worker_id, work_queue):
                 break
                 
             checker_state['current_account'] = account.username
+            print(f"[WORKER {worker_id}] Processing: {account.username}")
             
             # Use the original verify_account method from wf.py
             verified_account = checker.verify_account(account, worker_id)
@@ -447,6 +405,7 @@ def checker_worker(worker_id, work_queue):
         except queue.Empty:
             break
         except Exception as e:
+            print(f"[ERROR] Worker {worker_id}: {e}")
             add_log(f'Error in worker {worker_id}: {str(e)}', 'error')
             try:
                 work_queue.task_done()
@@ -455,6 +414,8 @@ def checker_worker(worker_id, work_queue):
 
 def monitor_progress(total):
     """Monitor and emit progress updates"""
+    print("[DEBUG] Monitor started")
+    
     while checker_state['running']:
         try:
             stats = checker_state['stats']
@@ -489,8 +450,10 @@ def monitor_progress(total):
             time.sleep(1)
             
         except Exception as e:
-            add_log(f'Monitor error: {str(e)}', 'error')
+            print(f"[ERROR] Monitor: {e}")
             time.sleep(1)
+    
+    print("[DEBUG] Monitor finished")
 
 @app.route('/api/stop', methods=['POST'])
 def stop_checker():
@@ -532,16 +495,26 @@ def health_check():
         'timestamp': datetime.now().isoformat()
     })
 
+# ============================================================
+# SOCKETIO EVENTS
+# ============================================================
 @socketio.on('connect')
 def handle_connect():
+    print(f"[SOCKET] Client connected")
     emit('connected', {'status': 'connected', 'timestamp': datetime.now().isoformat()})
     add_log('📡 Client connected', 'info')
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    add_log('📡 Client disconnected', 'info')
+    print(f"[SOCKET] Client disconnected")
 
-# Error handlers
+@socketio.on('ping')
+def handle_ping():
+    emit('pong', {'timestamp': datetime.now().isoformat()})
+
+# ============================================================
+# ERROR HANDLERS
+# ============================================================
 @app.errorhandler(404)
 def not_found(e):
     return jsonify({'error': 'Not found'}), 404
@@ -550,30 +523,23 @@ def not_found(e):
 def server_error(e):
     return jsonify({'error': 'Server error'}), 500
 
+# ============================================================
+# MAIN
+# ============================================================
 if __name__ == '__main__':
-    # Get port from environment variable
     port = int(os.environ.get('PORT', 8080))
     
-    print("[+] 🚀 Starting Roblox Account Checker on Railway")
+    print("=" * 70)
+    print("   ATX ROBLOX CHECKER - RAILWAY EDITION")
+    print("=" * 70)
     print(f"[+] 🌐 Running on port {port}")
-    print("[+] 📊 Using original AntraxRblxChecker engine with runtime patch")
+    print("[+] 📊 Using original AntraxRblxChecker engine")
     print("=" * 70)
     
-    # Run with eventlet for production
-    try:
-        socketio.run(
-            app,
-            host='0.0.0.0',
-            port=port,
-            debug=False,
-            use_reloader=False,
-            log_output=False
-        )
-    except TypeError:
-        socketio.run(
-            app,
-            host='0.0.0.0',
-            port=port,
-            debug=False,
-            use_reloader=False
-        )
+    socketio.run(
+        app,
+        host='0.0.0.0',
+        port=port,
+        debug=False,
+        use_reloader=False
+    )

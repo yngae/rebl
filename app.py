@@ -1,4 +1,4 @@
-# app.py - Railway Edition with Proper Chrome Setup
+# app.py - Railway Edition with Runtime Patches
 
 import os
 import sys
@@ -9,7 +9,7 @@ import queue
 import random
 from datetime import datetime
 
-# CRITICAL: Set Chrome paths BEFORE importing wf.py
+# Set Chrome paths for Railway
 os.environ['CHROME_BIN'] = '/usr/bin/google-chrome'
 os.environ['CHROMEDRIVER_PATH'] = '/usr/bin/chromedriver'
 os.environ['PATH'] = f"/usr/bin:{os.environ.get('PATH', '')}"
@@ -17,15 +17,12 @@ os.environ['PATH'] = f"/usr/bin:{os.environ.get('PATH', '')}"
 print("=" * 70)
 print("   ATX ROBLOX CHECKER - RAILWAY EDITION")
 print("=" * 70)
-print(f"[+] CHROME_BIN: {os.environ.get('CHROME_BIN', 'Not set')}")
-print(f"[+] CHROMEDRIVER_PATH: {os.environ.get('CHROMEDRIVER_PATH', 'Not set')}")
 
-# Import Flask
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 
-# Now import the original checker (no modifications needed)
+# Import the original checker
 try:
     from wf import AntraxRblxChecker, Account
     print("[+] ✅ Successfully loaded AntraxRblxChecker from wf.py")
@@ -33,6 +30,113 @@ except ImportError as e:
     print(f"[-] ❌ Error importing from wf.py: {e}")
     print("[!] Make sure wf.py is in the same directory")
     sys.exit(1)
+
+# PATCH: Override the DriverManager to work on Railway
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+
+# Monkey patch the DriverManager class
+def patched_create_driver(self, proxy: str = None, worker_id: int = 0):
+    """Patched driver creation for Railway"""
+    try:
+        print(f"[DEBUG] Creating driver for worker {worker_id}")
+        
+        # Use environment variables for Chrome paths
+        chrome_bin = os.environ.get('CHROME_BIN', '/usr/bin/google-chrome')
+        chromedriver_path = os.environ.get('CHROMEDRIVER_PATH', '/usr/bin/chromedriver')
+        
+        print(f"[DEBUG] Chrome binary: {chrome_bin}")
+        print(f"[DEBUG] ChromeDriver: {chromedriver_path}")
+        
+        options = Options()
+        
+        # Headless mode options for Railway
+        base_args = [
+            "--headless=new",
+            "--disable-gpu",
+            "--window-size=1920,1080",
+            "--disable-blink-features=AutomationControlled",
+            "--disable-dev-shm-usage",
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--remote-debugging-port=9222",
+            "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "--log-level=3",
+            "--disable-web-security",
+            "--disable-features=IsolateOrigins,site-per-process",
+            "--disable-extensions",
+            "--disable-plugins",
+            "--disable-images",
+            "--disable-javascript",
+            "--ignore-certificate-errors",
+            "--disable-crash-reporter",
+            "--disable-notifications",
+            "--disable-popup-blocking",
+            "--disable-infobars",
+            "--disable-background-timer-throttling",
+            "--disable-backgrounding-occluded-windows",
+            "--disable-renderer-backgrounding",
+            "--disable-ipc-flooding-protection",
+            "--disable-hang-monitor",
+            "--disable-browser-side-navigation"
+        ]
+        
+        for arg in base_args:
+            options.add_argument(arg)
+        
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option('useAutomationExtension', False)
+        
+        # Set Chrome binary
+        if os.path.exists(chrome_bin):
+            options.binary_location = chrome_bin
+            print(f"[DEBUG] Using Chrome binary: {chrome_bin}")
+        else:
+            print(f"[WARNING] Chrome binary not found at: {chrome_bin}")
+        
+        # Proxy configuration
+        if proxy:
+            options.add_argument(f'--proxy-server={proxy}')
+        
+        # Preferences
+        prefs = {
+            "credentials_enable_service": False,
+            "profile.password_manager_enabled": False,
+            "profile.default_content_setting_values.notifications": 2,
+            "intl.accept_languages": "en-US,en",
+        }
+        options.add_experimental_option("prefs", prefs)
+        
+        # Create service with chromedriver
+        if os.path.exists(chromedriver_path):
+            service = Service(executable_path=chromedriver_path)
+            print(f"[DEBUG] Using ChromeDriver: {chromedriver_path}")
+        else:
+            print(f"[WARNING] ChromeDriver not found at: {chromedriver_path}")
+            print("[DEBUG] Trying default chromedriver...")
+            service = Service()
+        
+        driver = webdriver.Chrome(service=service, options=options)
+        driver.set_page_load_timeout(30)
+        driver.set_script_timeout(30)
+        
+        print(f"[DEBUG] Driver created successfully for worker {worker_id}")
+        
+        driver_id = f"worker_{worker_id}"
+        self.active_drivers[driver_id] = driver
+        self.usage_count[driver_id] = 1
+        
+        return driver
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to create driver: {e}")
+        return None
+
+# Apply the patch to the DriverManager class
+from wf import DriverManager
+DriverManager.create_driver = patched_create_driver
+print("[+] ✅ Patched DriverManager for Railway")
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'railway-secret-key-change-this')
@@ -170,12 +274,11 @@ def start_checker():
             if line and not line.startswith('#'):
                 proxies.append(line)
     
-    # Create checker instance (uses the original AntraxRblxChecker)
+    # Create checker instance
     checker = AntraxRblxChecker()
     checker.accounts = accounts
     checker.min_delay = min_delay
     checker.max_delay = max_delay
-    # Limit threads for Railway (memory constraints)
     max_workers = min(threads, 5)
     checker.max_workers = max_workers
     checker.max_accounts_per_test = len(accounts)
@@ -334,7 +437,7 @@ def checker_worker(worker_id, work_queue):
                     status_emoji = '⏰'
                 add_log(f'{status_emoji} Worker {worker_id}: {verified_account.username} - {verified_account.message}', 'info')
             
-            # Delay between checks (using the checker's delay settings)
+            # Delay between checks
             if checker_state['running']:
                 delay = random.uniform(checker.min_delay, checker.max_delay)
                 time.sleep(delay)
@@ -448,12 +551,12 @@ def server_error(e):
     return jsonify({'error': 'Server error'}), 500
 
 if __name__ == '__main__':
-    # Get port from environment variable (Railway sets this)
+    # Get port from environment variable
     port = int(os.environ.get('PORT', 8080))
     
     print("[+] 🚀 Starting Roblox Account Checker on Railway")
     print(f"[+] 🌐 Running on port {port}")
-    print("[+] 📊 Using original AntraxRblxChecker engine (no modifications)")
+    print("[+] 📊 Using original AntraxRblxChecker engine with runtime patch")
     print("=" * 70)
     
     # Run with eventlet for production

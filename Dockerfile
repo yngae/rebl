@@ -1,4 +1,4 @@
-# Dockerfile - Fixed ChromeDriver extraction
+# Dockerfile - Fixed with matching Chrome and ChromeDriver versions
 FROM python:3.10-slim
 
 # Install Chrome and dependencies
@@ -10,38 +10,28 @@ RUN apt-get update && apt-get install -y \
     xvfb \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Chrome using the new method
+# Install Chrome 120 (matches ChromeDriver 120)
 RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor > /usr/share/keyrings/google-chrome.gpg \
     && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
-    && apt-get install -y google-chrome-stable \
+    && apt-get install -y google-chrome-stable=120.0.6099.109-1 \
+    && apt-mark hold google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
-# Install ChromeDriver - FIXED: handle the extracted folder
+# Install ChromeDriver 120 (matching Chrome version)
 RUN wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/120.0.6099.109/linux64/chromedriver-linux64.zip" \
     && unzip chromedriver-linux64.zip \
     && chmod +x chromedriver-linux64/chromedriver \
-    && mv chromedriver-linux64/chromedriver /usr/local/bin/ \
+    && mv chromedriver-linux64/chromedriver /usr/local/bin/chromedriver \
     && rm -rf chromedriver-linux64.zip chromedriver-linux64
 
-# Set working directory
 WORKDIR /app
 
-# Copy requirements first
 COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
-
-# Copy the rest of the application
 COPY . .
-
-# Create necessary directories
 RUN mkdir -p static uploads
 
-# Expose the port
 EXPOSE 8080
-
-# Run the application
 CMD ["python", "app.py"]

@@ -1,4 +1,4 @@
-# app.py - Clean version for Docker
+# app.py - Updated with better error handling and logging
 import os
 import sys
 import json
@@ -8,18 +8,21 @@ import logging
 from datetime import datetime
 from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
+import traceback
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # Import checker
 try:
     from checker import AntraxRblxChecker, VerificationMode, Account
-    logger.info("✅ Checker imported successfully")
+    logger.info("Checker imported successfully")
 except ImportError as e:
-    logger.error(f"❌ Failed to import checker: {e}")
-    # Fallback
+    logger.error(f"Failed to import checker: {e}")
     class AntraxRblxChecker:
         def __init__(self):
             self.stats = {'total': 0, 'verified': 0, 'valid': 0}
@@ -116,6 +119,7 @@ def get_status():
         })
     except Exception as e:
         logger.error(f"Status error: {e}")
+        logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/start', methods=['POST'])
@@ -132,6 +136,8 @@ def start_checker():
         if not combo_content:
             return jsonify({'error': 'No combo content provided'}), 400
         
+        logger.info(f"Starting checker with {len(combo_content.splitlines())} accounts")
+        
         # Save combo file
         combo_path = os.path.join(UPLOAD_FOLDER, f'combo_{int(time.time())}.txt')
         with open(combo_path, 'w', encoding='utf-8') as f:
@@ -147,23 +153,20 @@ def start_checker():
         # Create checker instance
         checker_instance = AntraxRblxChecker()
         
-        # Configure
-        mode_map = {
-            'normal': VerificationMode.NORMAL,
-            'headless': VerificationMode.HEADLESS,
-            'stealth': VerificationMode.STEALTH,
-            'rapid': VerificationMode.RAPID
-        }
+        # Configure - Force headless mode
+        checker_instance.mode = VerificationMode.HEADLESS
+        checker_instance.max_workers = int(data.get('threads', 1))
+        checker_instance.min_delay = float(data.get('min_delay', 2))
+        checker_instance.max_delay = float(data.get('max_delay', 3))
         
-        mode = data.get('mode', 'headless')
-        checker_instance.mode = mode_map.get(mode, VerificationMode.HEADLESS)
-        checker_instance.max_workers = int(data.get('threads', 2))
-        checker_instance.min_delay = float(data.get('min_delay', 3))
-        checker_instance.max_delay = float(data.get('max_delay', 8))
+        logger.info(f"Configured: threads={checker_instance.max_workers}, delay={checker_instance.min_delay}-{checker_instance.max_delay}s")
         
         # Load accounts
         if not checker_instance.load_accounts(combo_path):
+            logger.error("Failed to load accounts")
             return jsonify({'error': 'Failed to load accounts'}), 400
+        
+        logger.info(f"Loaded {len(checker_instance.accounts)} accounts")
         
         # Load proxies if provided
         proxy_content = data.get('proxy_content', '')
@@ -172,6 +175,7 @@ def start_checker():
             with open(proxy_path, 'w', encoding='utf-8') as f:
                 f.write(proxy_content)
             checker_instance.load_proxies(proxy_path)
+            logger.info(f"Loaded proxies from {proxy_path}")
         
         # Reset status
         current_status = {
@@ -197,6 +201,8 @@ def start_checker():
         verification_thread = threading.Thread(target=run_checker_thread, daemon=True)
         verification_thread.start()
         
+        logger.info("Checker thread started")
+        
         return jsonify({
             'success': True,
             'message': 'Checker started',
@@ -204,7 +210,8 @@ def start_checker():
         })
         
     except Exception as e:
-        logger.error(f"Start error: {e}", exc_info=True)
+        logger.error(f"Start error: {e}")
+        logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/stop', methods=['POST'])
@@ -215,6 +222,7 @@ def stop_checker():
         if checker_instance:
             checker_instance.running = False
         is_running = False
+        logger.info("Checker stopped by user")
         return jsonify({'success': True, 'message': 'Checker stopped'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -255,21 +263,22 @@ def run_checker_thread():
     global checker_instance, is_running
     
     try:
+        logger.info("Checker thread started running")
         if checker_instance:
-            # Force headless mode for Railway
-            if hasattr(checker_instance, 'mode'):
-                from checker import VerificationMode
-                checker_instance.mode = VerificationMode.HEADLESS
             checker_instance.start_verification()
+            logger.info("Checker verification completed")
     except Exception as e:
-        logger.error(f"Checker thread error: {e}", exc_info=True)
+        logger.error(f"Checker thread error: {e}")
+        logger.error(traceback.format_exc())
     finally:
         is_running = False
+        logger.info("Checker thread stopped")
         if checker_instance and hasattr(checker_instance, 'driver_manager'):
             try:
                 checker_instance.driver_manager.cleanup_drivers()
-            except:
-                pass
+                logger.info("Drivers cleaned up")
+            except Exception as e:
+                logger.error(f"Driver cleanup error: {e}")
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))

@@ -1,10 +1,11 @@
+<!-- templates/index.html - Web Interface -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Roblox Account Checker</title>
-    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -13,36 +14,36 @@
         }
         
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: #0a0a0f;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0e17;
             color: #e0e0e0;
             min-height: 100vh;
-            padding: 20px;
         }
         
         .container {
             max-width: 1400px;
             margin: 0 auto;
+            padding: 20px;
         }
         
-        .header {
+        header {
             text-align: center;
-            padding: 30px 0;
-            border-bottom: 1px solid #1a1a2e;
+            padding: 20px 0;
+            border-bottom: 1px solid #1a2a3a;
             margin-bottom: 30px;
         }
         
-        .header h1 {
-            font-size: 2.5rem;
-            background: linear-gradient(135deg, #00d4ff, #7b2ffc);
+        header h1 {
+            font-size: 2.5em;
+            background: linear-gradient(135deg, #ff4444, #ff6b6b);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            margin-bottom: 10px;
+            text-shadow: none;
         }
         
-        .header p {
-            color: #888;
-            font-size: 1rem;
+        header p {
+            color: #666;
+            margin-top: 5px;
         }
         
         .grid {
@@ -52,736 +53,763 @@
             margin-bottom: 20px;
         }
         
+        @media (max-width: 1024px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
         .card {
-            background: #12121f;
-            border: 1px solid #1a1a2e;
+            background: #111827;
+            border: 1px solid #1f2a3a;
             border-radius: 12px;
             padding: 20px;
+        }
+        
+        .card h2 {
+            font-size: 1.1em;
+            color: #888;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .card h2 .badge {
+            background: #1f2a3a;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 0.7em;
+            color: #666;
+            margin-left: 10px;
+        }
+        
+        textarea {
+            width: 100%;
+            padding: 12px;
+            background: #0d1520;
+            border: 1px solid #1f2a3a;
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            resize: vertical;
             transition: border-color 0.3s;
         }
         
-        .card:hover {
-            border-color: #2a2a4e;
+        textarea:focus {
+            outline: none;
+            border-color: #ff4444;
         }
         
-        .card h3 {
-            color: #888;
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
+        textarea::placeholder {
+            color: #444;
+        }
+        
+        .input-group {
             margin-bottom: 15px;
         }
         
-        .card textarea {
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #888;
+            font-size: 0.9em;
+        }
+        
+        .input-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+        }
+        
+        .input-row input {
             width: 100%;
-            height: 200px;
-            background: #0a0a12;
-            border: 1px solid #1a1a2e;
+            padding: 10px 12px;
+            background: #0d1520;
+            border: 1px solid #1f2a3a;
             border-radius: 8px;
             color: #e0e0e0;
-            padding: 12px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9rem;
-            resize: vertical;
+            font-size: 14px;
+            transition: border-color 0.3s;
         }
         
-        .card textarea:focus {
+        .input-row input:focus {
             outline: none;
-            border-color: #7b2ffc;
+            border-color: #ff4444;
         }
         
-        .card input[type="number"] {
-            width: 100%;
-            padding: 10px;
-            background: #0a0a12;
-            border: 1px solid #1a1a2e;
+        .btn {
+            padding: 12px 30px;
+            border: none;
             border-radius: 8px;
-            color: #e0e0e0;
-            font-size: 1rem;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
         
-        .card input[type="number"]:focus {
-            outline: none;
-            border-color: #7b2ffc;
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(255, 68, 68, 0.3);
         }
         
-        .control-group {
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #ff4444, #cc0000);
+            color: white;
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #00cc88, #009966);
+            color: white;
+        }
+        
+        .btn-warning {
+            background: linear-gradient(135deg, #ffaa00, #cc8800);
+            color: white;
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #ff4444, #cc0000);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: #1f2a3a;
+            color: #888;
+        }
+        
+        .btn-secondary:hover {
+            background: #2a3a4a;
+            color: #fff;
+        }
+        
+        .controls {
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
             margin-top: 15px;
         }
         
-        .btn {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            flex: 1;
-            min-width: 100px;
-        }
-        
-        .btn-primary {
-            background: linear-gradient(135deg, #00d4ff, #7b2ffc);
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(123, 47, 252, 0.3);
-        }
-        
-        .btn-primary:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
-        
-        .btn-danger {
-            background: #dc3545;
-            color: white;
-        }
-        
-        .btn-danger:hover {
-            background: #c82333;
-        }
-        
-        .btn-warning {
-            background: #ffc107;
-            color: #000;
-        }
-        
-        .btn-warning:hover {
-            background: #e0a800;
-        }
-        
-        .btn-success {
-            background: #28a745;
-            color: white;
-        }
-        
-        .btn-success:hover {
-            background: #218838;
-        }
-        
-        .btn-secondary {
-            background: #1a1a2e;
-            color: #e0e0e0;
-        }
-        
-        .btn-secondary:hover {
-            background: #2a2a4e;
-        }
-        
+        /* Stats Grid */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 15px;
-            margin: 15px 0;
+            gap: 10px;
         }
         
-        .stat-box {
-            background: #0a0a12;
-            padding: 15px;
+        .stat-item {
+            background: #0d1520;
+            padding: 12px;
             border-radius: 8px;
             text-align: center;
         }
         
-        .stat-box .number {
-            font-size: 1.8rem;
+        .stat-item .value {
+            font-size: 1.8em;
             font-weight: 700;
-            color: #00d4ff;
+            color: #fff;
         }
         
-        .stat-box .label {
-            font-size: 0.8rem;
+        .stat-item .label {
+            font-size: 0.75em;
             color: #666;
-            margin-top: 5px;
+            margin-top: 2px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
         
-        .stat-box.hit .number {
-            color: #28a745;
-        }
+        .stat-item .value.green { color: #00cc88; }
+        .stat-item .value.red { color: #ff4444; }
+        .stat-item .value.gold { color: #ffaa00; }
+        .stat-item .value.blue { color: #4488ff; }
+        .stat-item .value.purple { color: #aa66ff; }
         
-        .stat-box.premium .number {
-            color: #ffc107;
-        }
-        
-        .stat-box.robux .number {
-            color: #ff6b6b;
-        }
-        
+        /* Logs */
         .log-container {
-            background: #0a0a12;
+            background: #0d1520;
             border-radius: 8px;
-            padding: 15px;
-            height: 300px;
+            padding: 10px;
+            max-height: 300px;
             overflow-y: auto;
-            font-family: 'Courier New', monospace;
-            font-size: 0.85rem;
-            border: 1px solid #1a1a2e;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            line-height: 1.6;
         }
         
         .log-container::-webkit-scrollbar {
-            width: 8px;
+            width: 6px;
         }
         
         .log-container::-webkit-scrollbar-track {
-            background: #0a0a12;
+            background: #0d1520;
         }
         
         .log-container::-webkit-scrollbar-thumb {
-            background: #2a2a4e;
-            border-radius: 4px;
+            background: #1f2a3a;
+            border-radius: 3px;
         }
         
         .log-entry {
-            padding: 4px 0;
-            border-bottom: 1px solid #0a0a12;
+            padding: 2px 0;
+            border-bottom: 1px solid #0a0e17;
         }
         
         .log-entry .time {
-            color: #666;
+            color: #444;
             margin-right: 10px;
         }
         
-        .log-entry.success {
-            color: #28a745;
-        }
+        .log-entry .level-success { color: #00cc88; }
+        .log-entry .level-error { color: #ff4444; }
+        .log-entry .level-warning { color: #ffaa00; }
+        .log-entry .level-info { color: #4488ff; }
         
-        .log-entry.error {
-            color: #dc3545;
-        }
-        
-        .log-entry.warning {
-            color: #ffc107;
-        }
-        
-        .log-entry.info {
-            color: #00d4ff;
-        }
-        
+        /* Hits Table */
         .hits-container {
-            background: #0a0a12;
-            border-radius: 8px;
-            padding: 15px;
-            height: 300px;
+            max-height: 300px;
             overflow-y: auto;
-            border: 1px solid #1a1a2e;
         }
         
-        .hit-item {
-            padding: 10px;
-            border-bottom: 1px solid #1a1a2e;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .hits-container::-webkit-scrollbar {
+            width: 6px;
         }
         
-        .hit-item .username {
+        .hits-container::-webkit-scrollbar-track {
+            background: #0d1520;
+        }
+        
+        .hits-container::-webkit-scrollbar-thumb {
+            background: #1f2a3a;
+            border-radius: 3px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        
+        table th {
+            text-align: left;
+            padding: 10px 8px;
+            color: #666;
             font-weight: 600;
-            color: #00d4ff;
+            text-transform: uppercase;
+            font-size: 0.7em;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #1f2a3a;
+            position: sticky;
+            top: 0;
+            background: #111827;
         }
         
-        .hit-item .robux {
-            color: #ff6b6b;
-            font-weight: 600;
+        table td {
+            padding: 8px;
+            border-bottom: 1px solid #0d1520;
         }
         
-        .hit-item .premium {
-            color: #ffc107;
-            font-size: 0.8rem;
-            background: #1a1a2e;
-            padding: 2px 8px;
-            border-radius: 4px;
+        table tr:hover td {
+            background: #0d1520;
         }
         
-        .status-indicator {
+        .hit-premium {
+            color: #ffaa00;
+            font-weight: 700;
+        }
+        
+        .hit-robux {
+            color: #00cc88;
+        }
+        
+        .status-badge {
             display: inline-block;
-            width: 12px;
-            height: 12px;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 0.7em;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status-badge.hit { background: #00cc8822; color: #00cc88; }
+        .status-badge.wrong { background: #ff444422; color: #ff4444; }
+        .status-badge.captcha { background: #ffaa0022; color: #ffaa00; }
+        .status-badge.rate { background: #ff660022; color: #ff6600; }
+        .status-badge.timeout { background: #4488ff22; color: #4488ff; }
+        .status-badge.error { background: #ff444422; color: #ff4444; }
+        
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
-            margin-right: 10px;
+            margin-right: 6px;
         }
         
-        .status-indicator.running {
-            background: #28a745;
-            animation: pulse 1s infinite;
-        }
-        
-        .status-indicator.paused {
-            background: #ffc107;
-        }
-        
-        .status-indicator.stopped {
-            background: #dc3545;
-        }
+        .status-dot.running { background: #00cc88; animation: pulse 1s infinite; }
+        .status-dot.paused { background: #ffaa00; }
+        .status-dot.stopped { background: #ff4444; }
         
         @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
         }
         
         .status-text {
             display: flex;
             align-items: center;
-            padding: 10px 15px;
-            background: #0a0a12;
-            border-radius: 8px;
-            margin-bottom: 15px;
+            gap: 8px;
         }
         
-        .current-account {
-            color: #888;
-            font-size: 0.9rem;
+        .empty-state {
+            text-align: center;
+            color: #444;
+            padding: 40px 20px;
         }
         
-        .current-account span {
-            color: #e0e0e0;
-            font-weight: 600;
+        .empty-state .icon {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #0d1520;
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-bar .fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff4444, #ff6b6b);
+            border-radius: 2px;
+            transition: width 0.5s;
+            width: 0%;
         }
         
         .full-width {
             grid-column: 1 / -1;
         }
         
+        .flex-between {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        /* Responsive */
         @media (max-width: 768px) {
-            .grid {
+            .input-row {
                 grid-template-columns: 1fr;
             }
             
-            .header h1 {
-                font-size: 1.8rem;
+            .controls {
+                flex-direction: column;
             }
             
-            .btn {
-                min-width: 80px;
-                padding: 10px 16px;
-                font-size: 0.9rem;
+            .controls .btn {
+                width: 100%;
+            }
+            
+            header h1 {
+                font-size: 1.8em;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(3, 1fr);
             }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
+        <header>
             <h1>🎮 Roblox Account Checker</h1>
-            <p>Powered by AntraxRblxChecker Engine</p>
-        </div>
-
-        <div class="status-text">
-            <span class="status-indicator stopped" id="statusIndicator"></span>
-            <span id="statusLabel">Stopped</span>
-            <span style="margin-left: auto;" class="current-account">
-                Current: <span id="currentAccount">-</span>
-            </span>
-        </div>
-
+            <p>Web-based checker with live updates &mdash; No files saved</p>
+            <div class="status-text" style="justify-content: center; margin-top: 10px;">
+                <span class="status-dot stopped" id="statusDot"></span>
+                <span id="statusLabel" style="color: #666;">Stopped</span>
+            </div>
+        </header>
+        
         <div class="grid">
+            <!-- Configuration Card -->
             <div class="card">
-                <h3>📋 Accounts (user:pass)</h3>
-                <textarea id="comboInput" placeholder="username1:password1&#10;username2:password2&#10;username3:password3"></textarea>
-            </div>
-
-            <div class="card">
-                <h3>🌐 Proxies (optional)</h3>
-                <textarea id="proxyInput" placeholder="http://proxy1:port&#10;http://proxy2:port&#10;http://proxy3:port"></textarea>
-            </div>
-
-            <div class="card">
-                <h3>⚙️ Settings</h3>
-                <div style="display: grid; gap: 15px;">
+                <h2>⚙️ Configuration</h2>
+                
+                <div class="input-group">
+                    <label>Accounts (user:pass format, one per line)</label>
+                    <textarea id="comboInput" rows="8" placeholder="username1:password1&#10;username2:password2&#10;username3:password3"></textarea>
+                </div>
+                
+                <div class="input-group">
+                    <label>Proxies (optional, one per line)</label>
+                    <textarea id="proxyInput" rows="4" placeholder="http://proxy1:8080&#10;http://proxy2:8080"></textarea>
+                </div>
+                
+                <div class="input-row">
                     <div>
-                        <label style="display: block; color: #888; margin-bottom: 5px; font-size: 0.9rem;">Threads</label>
-                        <input type="number" id="threadsInput" value="3" min="1" max="5">
+                        <label>Threads</label>
+                        <input type="number" id="threadsInput" value="3" min="1" max="10">
                     </div>
                     <div>
-                        <label style="display: block; color: #888; margin-bottom: 5px; font-size: 0.9rem;">Min Delay (seconds)</label>
-                        <input type="number" id="minDelay" value="5" min="1" step="0.5">
+                        <label>Min Delay (s)</label>
+                        <input type="number" id="minDelayInput" value="5" min="1" step="0.5">
                     </div>
                     <div>
-                        <label style="display: block; color: #888; margin-bottom: 5px; font-size: 0.9rem;">Max Delay (seconds)</label>
-                        <input type="number" id="maxDelay" value="10" min="1" step="0.5">
+                        <label>Max Delay (s)</label>
+                        <input type="number" id="maxDelayInput" value="10" min="2" step="0.5">
                     </div>
                 </div>
-            </div>
-
-            <div class="card">
-                <h3>🎯 Controls</h3>
-                <div class="control-group">
+                
+                <div class="controls">
                     <button class="btn btn-primary" id="startBtn" onclick="startChecker()">▶ Start</button>
-                    <button class="btn btn-warning" id="pauseBtn" onclick="pauseChecker()" disabled>⏸ Pause</button>
-                    <button class="btn btn-success" id="resumeBtn" onclick="resumeChecker()" disabled>▶ Resume</button>
+                    <button class="btn btn-warning" id="pauseBtn" onclick="togglePause()" disabled>⏸ Pause</button>
                     <button class="btn btn-danger" id="stopBtn" onclick="stopChecker()" disabled>⏹ Stop</button>
-                </div>
-                <div class="control-group" style="margin-top: 10px;">
-                    <button class="btn btn-secondary" onclick="clearResults()">🧹 Clear Results</button>
+                    <button class="btn btn-secondary" onclick="clearLogs()">🗑 Clear Logs</button>
                 </div>
             </div>
-        </div>
-
-        <div class="grid">
-            <div class="card full-width">
-                <h3>📊 Statistics</h3>
+            
+            <!-- Statistics Card -->
+            <div class="card">
+                <h2>📊 Statistics <span class="badge" id="progressText">0 / 0</span></h2>
+                
+                <div class="progress-bar">
+                    <div class="fill" id="progressFill"></div>
+                </div>
+                
                 <div class="stats-grid">
-                    <div class="stat-box">
-                        <div class="number" id="totalAccounts">0</div>
-                        <div class="label">Total</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="number" id="verifiedAccounts">0</div>
-                        <div class="label">Verified</div>
-                    </div>
-                    <div class="stat-box hit">
-                        <div class="number" id="validAccounts">0</div>
+                    <div class="stat-item">
+                        <div class="value green" id="statHits">0</div>
                         <div class="label">Hits</div>
                     </div>
-                    <div class="stat-box premium">
-                        <div class="number" id="premiumAccounts">0</div>
+                    <div class="stat-item">
+                        <div class="value gold" id="statPremium">0</div>
                         <div class="label">Premium</div>
                     </div>
-                    <div class="stat-box robux">
-                        <div class="number" id="totalRobux">0</div>
-                        <div class="label">Total Robux</div>
+                    <div class="stat-item">
+                        <div class="value" id="statRobux">0</div>
+                        <div class="label">Robux</div>
                     </div>
-                    <div class="stat-box">
-                        <div class="number" id="speedStats">0</div>
-                        <div class="label">Speed/min</div>
+                    <div class="stat-item">
+                        <div class="value blue" id="statSpeed">0</div>
+                        <div class="label">/min</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="value purple" id="statRate">0%</div>
+                        <div class="label">Hit Rate</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="value" id="statElapsed">0s</div>
+                        <div class="label">Elapsed</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                    <div class="stat-item" style="background: #0d1520; padding: 8px;">
+                        <div class="value red" id="statWrong" style="font-size: 1.2em;">0</div>
+                        <div class="label">Wrong</div>
+                    </div>
+                    <div class="stat-item" style="background: #0d1520; padding: 8px;">
+                        <div class="value" id="statCaptcha" style="font-size: 1.2em;">0</div>
+                        <div class="label">Captcha</div>
+                    </div>
+                    <div class="stat-item" style="background: #0d1520; padding: 8px;">
+                        <div class="value" id="statRateLimit" style="font-size: 1.2em;">0</div>
+                        <div class="label">Rate Limit</div>
+                    </div>
+                    <div class="stat-item" style="background: #0d1520; padding: 8px;">
+                        <div class="value" id="statTimeout" style="font-size: 1.2em;">0</div>
+                        <div class="label">Timeout</div>
                     </div>
                 </div>
             </div>
         </div>
-
+        
         <div class="grid">
+            <!-- Logs Card -->
             <div class="card">
-                <h3>📝 Logs</h3>
-                <div class="log-container" id="logContainer"></div>
+                <h2>📝 Live Logs</h2>
+                <div class="log-container" id="logContainer">
+                    <div class="empty-state">
+                        <div class="icon">📡</div>
+                        <p>Waiting for activity...</p>
+                    </div>
+                </div>
             </div>
-
+            
+            <!-- Hits Card -->
             <div class="card">
-                <h3>🏆 Hits</h3>
+                <h2>🎯 Hits <span class="badge" id="hitCount">0</span></h2>
                 <div class="hits-container" id="hitsContainer">
-                    <div style="color: #666; text-align: center; padding: 40px 0;">No hits yet</div>
+                    <div class="empty-state">
+                        <div class="icon">🔍</div>
+                        <p>No hits yet</p>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-
+    
     <script>
-        // ============================================================
-        // SOCKETIO CONNECTION - FIXED to prevent loop
-        // ============================================================
-        let socket = null;
-        let reconnectAttempts = 0;
-        const MAX_RECONNECT_ATTEMPTS = 3;
-
-        function initSocket() {
-            if (socket && socket.connected) {
-                return;
-            }
-
-            socket = io({
-                // Don't auto reconnect - we'll handle it manually
-                reconnection: false,
-                transports: ['websocket', 'polling'],
-                timeout: 10000
-            });
-
-            socket.on('connect', () => {
-                console.log('[SOCKET] Connected');
-                reconnectAttempts = 0;
-                addLog('📡 Connected to server', 'info');
-            });
-
-            socket.on('disconnect', () => {
-                console.log('[SOCKET] Disconnected');
-                // Don't auto reconnect - just log it
-            });
-
-            socket.on('connect_error', (error) => {
-                console.log('[SOCKET] Connection error:', error);
-                // Try to reconnect manually if we haven't tried too many times
-                if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-                    reconnectAttempts++;
-                    console.log(`[SOCKET] Reconnect attempt ${reconnectAttempts}`);
-                    setTimeout(() => {
-                        if (socket) {
-                            socket.connect();
-                        }
-                    }, 2000);
-                } else {
-                    addLog('⚠️ Could not connect to server. Please refresh.', 'warning');
-                }
-            });
-
-            // Event handlers
-            socket.on('connected', (data) => {
-                console.log('[SOCKET] Connected event received');
-                updateStatus('stopped');
-            });
-
-            socket.on('log', (data) => {
-                addLog(data.message, data.level);
-            });
-
-            socket.on('update', (data) => {
-                if (data.username) {
-                    document.getElementById('currentAccount').textContent = data.username;
-                }
-            });
-
-            socket.on('progress', (data) => {
-                document.getElementById('verifiedAccounts').textContent = data.verified || 0;
-                document.getElementById('validAccounts').textContent = data.valid || 0;
-                document.getElementById('premiumAccounts').textContent = data.premium || 0;
-                document.getElementById('totalRobux').textContent = data.robux || 0;
-                document.getElementById('speedStats').textContent = data.speed || 0;
-                
-                if (data.verified >= data.total && data.total > 0) {
-                    updateStatus('stopped');
-                    document.getElementById('startBtn').disabled = false;
-                    document.getElementById('pauseBtn').disabled = true;
-                    document.getElementById('resumeBtn').disabled = true;
-                    document.getElementById('stopBtn').disabled = true;
-                }
-            });
-
-            socket.on('hit', (data) => {
-                addHit(data);
-                updateStats();
-            });
-
-            socket.on('complete', (data) => {
-                addLog('✅ ' + data.message, 'success');
-                updateStatus('stopped');
-                document.getElementById('startBtn').disabled = false;
-                document.getElementById('pauseBtn').disabled = true;
-                document.getElementById('resumeBtn').disabled = true;
-                document.getElementById('stopBtn').disabled = true;
-            });
-        }
-
-        // Initialize socket on page load
-        initSocket();
-
-        // ============================================================
-        // FUNCTIONS
-        // ============================================================
-        function updateStatus(status) {
-            const indicator = document.getElementById('statusIndicator');
-            const label = document.getElementById('statusLabel');
-            
-            indicator.className = 'status-indicator';
-            if (status === 'running') {
-                indicator.classList.add('running');
-                label.textContent = 'Running';
-            } else if (status === 'paused') {
-                indicator.classList.add('paused');
-                label.textContent = 'Paused';
-            } else {
-                indicator.classList.add('stopped');
-                label.textContent = 'Stopped';
-            }
-        }
-
+        // Socket connection
+        const socket = io();
+        let isRunning = false;
+        let isPaused = false;
+        
+        // DOM references
+        const logContainer = document.getElementById('logContainer');
+        const hitsContainer = document.getElementById('hitsContainer');
+        
+        // Status indicators
+        const statusDot = document.getElementById('statusDot');
+        const statusLabel = document.getElementById('statusLabel');
+        
+        // Stats elements
+        const statHits = document.getElementById('statHits');
+        const statPremium = document.getElementById('statPremium');
+        const statRobux = document.getElementById('statRobux');
+        const statSpeed = document.getElementById('statSpeed');
+        const statRate = document.getElementById('statRate');
+        const statElapsed = document.getElementById('statElapsed');
+        const statWrong = document.getElementById('statWrong');
+        const statCaptcha = document.getElementById('statCaptcha');
+        const statRateLimit = document.getElementById('statRateLimit');
+        const statTimeout = document.getElementById('statTimeout');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const hitCount = document.getElementById('hitCount');
+        
+        // Buttons
+        const startBtn = document.getElementById('startBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        
+        // Socket events
+        socket.on('connect', () => {
+            addLog('Connected to server', 'info');
+        });
+        
+        socket.on('log', (data) => {
+            addLog(data.message, data.level);
+        });
+        
+        socket.on('update', (data) => {
+            // Update recent results if needed
+        });
+        
+        socket.on('progress', (data) => {
+            updateStats(data);
+        });
+        
+        socket.on('complete', (data) => {
+            addLog('✅ ' + data.message, 'success');
+            setStatus('stopped');
+            isRunning = false;
+            updateButtons();
+        });
+        
+        // Functions
         function addLog(message, level = 'info') {
-            const container = document.getElementById('logContainer');
             const entry = document.createElement('div');
-            entry.className = `log-entry ${level}`;
-            
+            entry.className = 'log-entry';
             const time = new Date().toLocaleTimeString();
-            entry.innerHTML = `<span class="time">[${time}]</span>${message}`;
+            entry.innerHTML = `<span class="time">[${time}]</span><span class="level-${level}">${message}</span>`;
             
-            container.appendChild(entry);
-            container.scrollTop = container.scrollHeight;
+            // Remove empty state if present
+            const emptyState = logContainer.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
             
-            while (container.children.length > 500) {
-                container.removeChild(container.firstChild);
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // Keep only last 200 entries
+            while (logContainer.children.length > 200) {
+                logContainer.removeChild(logContainer.firstChild);
             }
         }
-
-        function addHit(data) {
-            const container = document.getElementById('hitsContainer');
+        
+        function addHit(hit) {
+            // Remove empty state if present
+            const emptyState = hitsContainer.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
             
-            const noHits = container.querySelector('div[style]');
-            if (noHits) {
-                container.innerHTML = '';
-            }
+            const row = document.createElement('tr');
+            const premium = hit.premium ? '👑' : '';
+            const robux = hit.robux > 0 ? `R$${hit.robux.toLocaleString()}` : '-';
             
-            const hit = document.createElement('div');
-            hit.className = 'hit-item';
-            hit.innerHTML = `
-                <div>
-                    <span class="username">${data.username}</span>
-                    ${data.premium ? '<span class="premium">⭐ PREMIUM</span>' : ''}
-                </div>
-                <div>
-                    <span class="robux">💰 ${data.robux || 0} R$</span>
-                    <span style="color: #666; font-size: 0.8rem; margin-left: 10px;">${data.time || ''}</span>
-                </div>
+            row.innerHTML = `
+                <td><strong>${hit.username}</strong></td>
+                <td>${hit.password}</td>
+                <td class="hit-robux">${robux}</td>
+                <td class="hit-premium">${premium}</td>
+                <td style="font-size: 0.8em; color: #666;">${hit.time || ''}</td>
             `;
             
-            container.insertBefore(hit, container.firstChild);
+            hitsContainer.querySelector('table')?.appendChild(row);
             
-            while (container.children.length > 100) {
-                container.removeChild(container.lastChild);
-            }
+            // Update hit count
+            hitCount.textContent = hitsContainer.querySelectorAll('tr').length;
         }
-
-        async function updateStats() {
-            try {
-                const response = await fetch('/api/status');
-                const data = await response.json();
-                
-                if (data.stats) {
-                    document.getElementById('totalAccounts').textContent = data.stats.total || 0;
-                    document.getElementById('verifiedAccounts').textContent = data.stats.verified || 0;
-                    document.getElementById('validAccounts').textContent = data.stats.valid || 0;
-                    document.getElementById('premiumAccounts').textContent = data.stats.premium_accounts || 0;
-                    document.getElementById('totalRobux').textContent = data.stats.total_robux || 0;
-                }
-                
-                if (data.running) {
-                    updateStatus(data.paused ? 'paused' : 'running');
-                }
-                
-                if (data.hits && data.hits.length > 0) {
-                    const container = document.getElementById('hitsContainer');
-                    const noHits = container.querySelector('div[style]');
-                    if (noHits) {
-                        container.innerHTML = '';
-                    }
-                    
-                    data.hits.slice().reverse().forEach(hit => {
-                        const hitEl = document.createElement('div');
-                        hitEl.className = 'hit-item';
-                        hitEl.innerHTML = `
-                            <div>
-                                <span class="username">${hit.username}</span>
-                                ${hit.premium ? '<span class="premium">⭐ PREMIUM</span>' : ''}
-                            </div>
-                            <div>
-                                <span class="robux">💰 ${hit.robux || 0} R$</span>
-                                <span style="color: #666; font-size: 0.8rem; margin-left: 10px;">${hit.time || ''}</span>
-                            </div>
-                        `;
-                        container.appendChild(hitEl);
-                    });
-                }
-            } catch (error) {
-                console.error('Failed to update stats:', error);
+        
+        function updateStats(data) {
+            statHits.textContent = data.valid || 0;
+            statPremium.textContent = data.premium || 0;
+            statRobux.textContent = (data.robux || 0).toLocaleString();
+            statSpeed.textContent = data.speed || 0;
+            statRate.textContent = (data.hit_rate || 0) + '%';
+            
+            const elapsed = data.elapsed || 0;
+            if (elapsed < 60) {
+                statElapsed.textContent = Math.floor(elapsed) + 's';
+            } else {
+                const mins = Math.floor(elapsed / 60);
+                const secs = Math.floor(elapsed % 60);
+                statElapsed.textContent = mins + 'm ' + secs + 's';
             }
+            
+            const progress = data.total > 0 ? (data.verified / data.total * 100) : 0;
+            progressFill.style.width = Math.min(progress, 100) + '%';
+            progressText.textContent = `${data.verified || 0} / ${data.total || 0}`;
         }
-
+        
+        function setStatus(status) {
+            statusDot.className = 'status-dot ' + status;
+            const labels = {
+                'running': 'Running',
+                'paused': 'Paused',
+                'stopped': 'Stopped'
+            };
+            statusLabel.textContent = labels[status] || 'Stopped';
+        }
+        
+        function updateButtons() {
+            startBtn.disabled = isRunning;
+            pauseBtn.disabled = !isRunning || isPaused;
+            pauseBtn.textContent = isPaused ? '▶ Resume' : '⏸ Pause';
+            stopBtn.disabled = !isRunning;
+        }
+        
         async function startChecker() {
-            const combo = document.getElementById('comboInput').value;
-            const proxies = document.getElementById('proxyInput').value;
-            const threads = parseInt(document.getElementById('threadsInput').value) || 3;
-            const minDelay = parseFloat(document.getElementById('minDelay').value) || 5;
-            const maxDelay = parseFloat(document.getElementById('maxDelay').value) || 10;
-
-            if (!combo.trim()) {
-                alert('Please enter at least one account (format: username:password)');
+            const combo = document.getElementById('comboInput').value.trim();
+            if (!combo) {
+                alert('Please enter at least one account (user:pass)');
                 return;
             }
-
+            
+            const data = {
+                combo: combo,
+                proxies: document.getElementById('proxyInput').value.trim(),
+                threads: parseInt(document.getElementById('threadsInput').value) || 3,
+                min_delay: parseFloat(document.getElementById('minDelayInput').value) || 5,
+                max_delay: parseFloat(document.getElementById('maxDelayInput').value) || 10
+            };
+            
             try {
                 const response = await fetch('/api/start', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        combo: combo,
-                        proxies: proxies,
-                        threads: threads,
-                        min_delay: minDelay,
-                        max_delay: maxDelay
-                    })
+                    body: JSON.stringify(data)
                 });
-
-                const data = await response.json();
-
-                if (data.error) {
-                    alert('Error: ' + data.error);
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    alert('Error: ' + result.error);
                     return;
                 }
-
-                document.getElementById('totalAccounts').textContent = data.total || 0;
-                document.getElementById('startBtn').disabled = true;
-                document.getElementById('pauseBtn').disabled = false;
-                document.getElementById('stopBtn').disabled = false;
-                document.getElementById('resumeBtn').disabled = true;
                 
-                updateStatus('running');
-                addLog(`🚀 Started checker with ${data.total || 0} accounts`, 'success');
-
+                isRunning = true;
+                isPaused = false;
+                setStatus('running');
+                updateButtons();
+                addLog('🚀 Checker started with ' + result.total + ' accounts', 'success');
+                
             } catch (error) {
-                console.error('Start error:', error);
-                alert('Failed to start checker');
+                alert('Error starting checker: ' + error.message);
             }
         }
-
-        async function pauseChecker() {
+        
+        async function togglePause() {
             try {
-                await fetch('/api/pause', { method: 'POST' });
-                document.getElementById('pauseBtn').disabled = true;
-                document.getElementById('resumeBtn').disabled = false;
-                updateStatus('paused');
-                addLog('⏸ Checker paused', 'warning');
+                if (isPaused) {
+                    await fetch('/api/resume', { method: 'POST' });
+                    isPaused = false;
+                    setStatus('running');
+                    addLog('▶ Resumed', 'info');
+                } else {
+                    await fetch('/api/pause', { method: 'POST' });
+                    isPaused = true;
+                    setStatus('paused');
+                    addLog('⏸ Paused', 'warning');
+                }
+                updateButtons();
             } catch (error) {
-                console.error('Pause error:', error);
+                alert('Error: ' + error.message);
             }
         }
-
-        async function resumeChecker() {
-            try {
-                await fetch('/api/resume', { method: 'POST' });
-                document.getElementById('pauseBtn').disabled = false;
-                document.getElementById('resumeBtn').disabled = true;
-                updateStatus('running');
-                addLog('▶ Checker resumed', 'info');
-            } catch (error) {
-                console.error('Resume error:', error);
-            }
-        }
-
+        
         async function stopChecker() {
+            if (!confirm('Stop the checker?')) return;
+            
             try {
                 await fetch('/api/stop', { method: 'POST' });
-                document.getElementById('startBtn').disabled = false;
-                document.getElementById('pauseBtn').disabled = true;
-                document.getElementById('resumeBtn').disabled = true;
-                document.getElementById('stopBtn').disabled = true;
-                updateStatus('stopped');
+                isRunning = false;
+                isPaused = false;
+                setStatus('stopped');
+                updateButtons();
                 addLog('⏹ Checker stopped', 'warning');
             } catch (error) {
-                console.error('Stop error:', error);
+                alert('Error: ' + error.message);
             }
         }
-
-        async function clearResults() {
+        
+        function clearLogs() {
+            logContainer.innerHTML = `
+                <div class="empty-state">
+                    <div class="icon">📡</div>
+                    <p>Logs cleared</p>
+                </div>
+            `;
+        }
+        
+        // Initial fetch of hits
+        async function fetchHits() {
             try {
-                await fetch('/api/clear', { method: 'POST' });
-                document.getElementById('hitsContainer').innerHTML = '<div style="color: #666; text-align: center; padding: 40px 0;">No hits yet</div>';
-                document.getElementById('logContainer').innerHTML = '';
-                addLog('🧹 Results cleared', 'info');
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                if (data.hits && data.hits.length > 0) {
+                    data.hits.forEach(hit => addHit(hit));
+                }
+                
+                if (data.stats) {
+                    updateStats(data.stats);
+                }
             } catch (error) {
-                console.error('Clear error:', error);
+                console.error('Error fetching status:', error);
             }
         }
-
-        // ============================================================
-        // INITIALIZATION
-        // ============================================================
-        setInterval(updateStats, 3000);
-        updateStats();
-        addLog('🎮 Welcome to Roblox Account Checker', 'info');
-        addLog('💡 Enter accounts and click Start', 'info');
-
-        console.log('[APP] Initialized successfully');
+        
+        // Initial load
+        fetchHits();
+        
+        // Update buttons initially
+        updateButtons();
+        
+        // Auto-refresh status every 3 seconds
+        setInterval(fetchHits, 3000);
     </script>
 </body>
 </html>

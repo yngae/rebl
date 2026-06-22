@@ -473,92 +473,100 @@
 
     <script>
         // ============================================================
-        // SOCKETIO CONNECTION - FIXED for Railway
+        // SOCKETIO CONNECTION - FIXED to prevent loop
         // ============================================================
-        const socket = io({
-            // Force new connection to avoid invalid session errors
-            forceNew: true,
-            reconnection: true,
-            reconnectionAttempts: 5,
-            reconnectionDelay: 1000,
-            reconnectionDelayMax: 5000,
-            timeout: 20000,
-            transports: ['websocket', 'polling']
-        });
+        let socket = null;
+        let reconnectAttempts = 0;
+        const MAX_RECONNECT_ATTEMPTS = 3;
 
-        // Handle connection
-        socket.on('connect', () => {
-            console.log('[SOCKET] Connected with new session');
-            addLog('📡 Connected to server', 'info');
-        });
-
-        // Handle disconnection
-        socket.on('disconnect', () => {
-            console.log('[SOCKET] Disconnected');
-            addLog('📡 Disconnected from server', 'warning');
-        });
-
-        // Handle reconnection
-        socket.on('reconnect', () => {
-            console.log('[SOCKET] Reconnected');
-            addLog('📡 Reconnected to server', 'info');
-        });
-
-        // Handle connection error
-        socket.on('connect_error', (error) => {
-            console.log('[SOCKET] Connection error:', error);
-            // Don't show error to user, just log it
-        });
-
-        // ============================================================
-        // SOCKET EVENT HANDLERS
-        // ============================================================
-        socket.on('connected', (data) => {
-            console.log('[SOCKET] Connected event:', data);
-            updateStatus('stopped');
-        });
-
-        socket.on('log', (data) => {
-            addLog(data.message, data.level);
-        });
-
-        socket.on('update', (data) => {
-            // Update current account
-            if (data.username) {
-                document.getElementById('currentAccount').textContent = data.username;
+        function initSocket() {
+            if (socket && socket.connected) {
+                return;
             }
-        });
 
-        socket.on('progress', (data) => {
-            document.getElementById('verifiedAccounts').textContent = data.verified || 0;
-            document.getElementById('validAccounts').textContent = data.valid || 0;
-            document.getElementById('premiumAccounts').textContent = data.premium || 0;
-            document.getElementById('totalRobux').textContent = data.robux || 0;
-            document.getElementById('speedStats').textContent = data.speed || 0;
-            
-            if (data.verified >= data.total && data.total > 0) {
+            socket = io({
+                // Don't auto reconnect - we'll handle it manually
+                reconnection: false,
+                transports: ['websocket', 'polling'],
+                timeout: 10000
+            });
+
+            socket.on('connect', () => {
+                console.log('[SOCKET] Connected');
+                reconnectAttempts = 0;
+                addLog('📡 Connected to server', 'info');
+            });
+
+            socket.on('disconnect', () => {
+                console.log('[SOCKET] Disconnected');
+                // Don't auto reconnect - just log it
+            });
+
+            socket.on('connect_error', (error) => {
+                console.log('[SOCKET] Connection error:', error);
+                // Try to reconnect manually if we haven't tried too many times
+                if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                    reconnectAttempts++;
+                    console.log(`[SOCKET] Reconnect attempt ${reconnectAttempts}`);
+                    setTimeout(() => {
+                        if (socket) {
+                            socket.connect();
+                        }
+                    }, 2000);
+                } else {
+                    addLog('⚠️ Could not connect to server. Please refresh.', 'warning');
+                }
+            });
+
+            // Event handlers
+            socket.on('connected', (data) => {
+                console.log('[SOCKET] Connected event received');
+                updateStatus('stopped');
+            });
+
+            socket.on('log', (data) => {
+                addLog(data.message, data.level);
+            });
+
+            socket.on('update', (data) => {
+                if (data.username) {
+                    document.getElementById('currentAccount').textContent = data.username;
+                }
+            });
+
+            socket.on('progress', (data) => {
+                document.getElementById('verifiedAccounts').textContent = data.verified || 0;
+                document.getElementById('validAccounts').textContent = data.valid || 0;
+                document.getElementById('premiumAccounts').textContent = data.premium || 0;
+                document.getElementById('totalRobux').textContent = data.robux || 0;
+                document.getElementById('speedStats').textContent = data.speed || 0;
+                
+                if (data.verified >= data.total && data.total > 0) {
+                    updateStatus('stopped');
+                    document.getElementById('startBtn').disabled = false;
+                    document.getElementById('pauseBtn').disabled = true;
+                    document.getElementById('resumeBtn').disabled = true;
+                    document.getElementById('stopBtn').disabled = true;
+                }
+            });
+
+            socket.on('hit', (data) => {
+                addHit(data);
+                updateStats();
+            });
+
+            socket.on('complete', (data) => {
+                addLog('✅ ' + data.message, 'success');
                 updateStatus('stopped');
                 document.getElementById('startBtn').disabled = false;
                 document.getElementById('pauseBtn').disabled = true;
                 document.getElementById('resumeBtn').disabled = true;
                 document.getElementById('stopBtn').disabled = true;
-            }
-        });
+            });
+        }
 
-        socket.on('hit', (data) => {
-            addHit(data);
-            // Update stats immediately
-            updateStats();
-        });
-
-        socket.on('complete', (data) => {
-            addLog('✅ ' + data.message, 'success');
-            updateStatus('stopped');
-            document.getElementById('startBtn').disabled = false;
-            document.getElementById('pauseBtn').disabled = true;
-            document.getElementById('resumeBtn').disabled = true;
-            document.getElementById('stopBtn').disabled = true;
-        });
+        // Initialize socket on page load
+        initSocket();
 
         // ============================================================
         // FUNCTIONS
@@ -591,7 +599,6 @@
             container.appendChild(entry);
             container.scrollTop = container.scrollHeight;
             
-            // Keep only last 500 logs
             while (container.children.length > 500) {
                 container.removeChild(container.firstChild);
             }
@@ -600,7 +607,6 @@
         function addHit(data) {
             const container = document.getElementById('hitsContainer');
             
-            // Remove "No hits" message if present
             const noHits = container.querySelector('div[style]');
             if (noHits) {
                 container.innerHTML = '';
@@ -621,7 +627,6 @@
             
             container.insertBefore(hit, container.firstChild);
             
-            // Keep only last 100 hits
             while (container.children.length > 100) {
                 container.removeChild(container.lastChild);
             }
@@ -644,7 +649,6 @@
                     updateStatus(data.paused ? 'paused' : 'running');
                 }
                 
-                // Update hits
                 if (data.hits && data.hits.length > 0) {
                     const container = document.getElementById('hitsContainer');
                     const noHits = container.querySelector('div[style]');
@@ -772,13 +776,8 @@
         // ============================================================
         // INITIALIZATION
         // ============================================================
-        // Update stats every 3 seconds
         setInterval(updateStats, 3000);
-
-        // Initial update
         updateStats();
-
-        // Add welcome message
         addLog('🎮 Welcome to Roblox Account Checker', 'info');
         addLog('💡 Enter accounts and click Start', 'info');
 

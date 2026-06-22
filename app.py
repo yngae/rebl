@@ -1,4 +1,4 @@
-# app.py - Complete version for web display
+# app.py - Complete fixed version for Railway
 import os
 import sys
 import json
@@ -12,7 +12,7 @@ import traceback
 
 # Setup logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -38,9 +38,14 @@ except ImportError as e:
             self.web_results = []
             self.accounts = []
             self.running = True
-        def load_accounts(self, path): return False
-        def load_proxies(self, path): return False
-        def start_verification_simple(self): pass
+        def load_accounts(self, path): 
+            return False
+        def load_proxies(self, path): 
+            return False
+        def start_verification_simple(self): 
+            self.web_results.append("Checker not available")
+        def start_verification(self): 
+            self.web_results.append("Checker not available")
     class VerificationMode:
         HEADLESS = "headless"
     class Account:
@@ -82,7 +87,6 @@ if not os.path.exists('static'):
 
 @app.route('/')
 def index():
-    """Serve the main HTML page"""
     try:
         return send_from_directory('static', 'index.html')
     except Exception as e:
@@ -91,7 +95,6 @@ def index():
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Health check endpoint"""
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now().isoformat(),
@@ -100,7 +103,6 @@ def health_check():
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
-    """Get current checker status with web results"""
     global current_status, is_running, checker_instance
     
     try:
@@ -132,11 +134,11 @@ def get_status():
         })
     except Exception as e:
         logger.error(f"Status error: {e}")
+        logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/start', methods=['POST'])
 def start_checker():
-    """Start the checker"""
     global checker_instance, verification_thread, is_running, current_status
     
     if is_running:
@@ -230,7 +232,6 @@ def start_checker():
 
 @app.route('/api/stop', methods=['POST'])
 def stop_checker():
-    """Stop the checker"""
     global checker_instance, is_running
     
     try:
@@ -244,7 +245,6 @@ def stop_checker():
 
 @app.route('/api/results', methods=['GET'])
 def get_results():
-    """Get all web results"""
     global checker_instance
     
     try:
@@ -259,7 +259,6 @@ def get_results():
 
 @app.route('/api/clear', methods=['POST'])
 def clear_results():
-    """Clear web results"""
     global checker_instance
     
     try:
@@ -271,7 +270,6 @@ def clear_results():
 
 @app.route('/api/files', methods=['GET'])
 def list_files():
-    """List result files"""
     try:
         files = []
         result_files = ['valid_result.txt', 'cookie_result.txt', 'hits_summary.txt']
@@ -292,7 +290,6 @@ def list_files():
 
 @app.route('/api/download/<filename>', methods=['GET'])
 def download_file(filename):
-    """Download result files"""
     safe_files = ['valid_result.txt', 'cookie_result.txt', 'hits_summary.txt']
     
     if filename not in safe_files:
@@ -307,13 +304,21 @@ def run_checker_thread():
     """Run checker in background thread"""
     global checker_instance, is_running
     
+    logger.info("Run checker thread started")
+    
     try:
         if checker_instance:
+            logger.info("Checking if start_verification_simple exists")
             if hasattr(checker_instance, 'start_verification_simple'):
+                logger.info("Calling start_verification_simple")
                 checker_instance.start_verification_simple()
+                logger.info("start_verification_simple completed")
             else:
+                logger.warning("start_verification_simple not found, using start_verification")
                 checker_instance.start_verification()
             logger.info("Checker verification completed")
+        else:
+            logger.error("No checker instance")
     except Exception as e:
         logger.error(f"Checker thread error: {e}")
         logger.error(traceback.format_exc())

@@ -1,127 +1,761 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>ATX Roblox Checker</title>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATX Roblox Checker</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #0a0e1a; color: #fff; padding: 20px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        .card { background: #141b2d; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-        textarea { width: 100%; padding: 10px; background: #0a0e1a; color: #fff; border: 1px solid #1f2a42; border-radius: 4px; }
-        button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
-        .btn-start { background: #667eea; color: #fff; }
-        .btn-stop { background: #dc3545; color: #fff; }
-        .status { margin-top: 10px; padding: 10px; background: #0a0e1a; border-radius: 4px; }
-        .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 10px 0; }
-        .stat-item { background: #0a0e1a; padding: 10px; text-align: center; border-radius: 4px; }
-        .stat-value { font-size: 24px; font-weight: bold; color: #667eea; }
-        .stat-label { font-size: 12px; color: #8892b0; }
-        .hit { color: #4ade80; }
-        .premium { color: #fbbf24; }
-        .progress-bar { width: 100%; height: 6px; background: #0a0e1a; border-radius: 3px; margin: 10px 0; }
-        .progress-fill { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 3px; transition: width 0.5s; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #0a0e1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #2a2f4a;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 5px;
+        }
+        
+        .header p {
+            color: #8892b0;
+            font-size: 1em;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .card {
+            background: #141b2d;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #1f2a42;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        
+        .card h3 {
+            color: #a8b8d8;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+            border-bottom: 1px solid #1f2a42;
+            padding-bottom: 10px;
+        }
+        
+        .full-width {
+            grid-column: 1 / -1;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            color: #8892b0;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+        
+        .form-group textarea,
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            background: #0a0e1a;
+            border: 1px solid #1f2a42;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 0.95em;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group textarea {
+            min-height: 120px;
+            font-family: 'Courier New', monospace;
+            resize: vertical;
+        }
+        
+        .form-group textarea:focus,
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-danger:hover:not(:disabled) {
+            background: #c82333;
+            transform: translateY(-2px);
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-success:hover:not(:disabled) {
+            background: #218838;
+            transform: translateY(-2px);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .stat-item {
+            background: #0a0e1a;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        
+        .stat-item .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-item .stat-label {
+            font-size: 0.8em;
+            color: #8892b0;
+            margin-top: 3px;
+        }
+        
+        .stat-item.hit .stat-value {
+            color: #4ade80;
+        }
+        
+        .stat-item.premium .stat-value {
+            color: #fbbf24;
+        }
+        
+        .stat-item.robux .stat-value {
+            color: #34d399;
+        }
+        
+        .status-bar {
+            background: #0a0e1a;
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        .status-dot.running {
+            background: #4ade80;
+            animation: pulse 1.5s infinite;
+        }
+        
+        .status-dot.stopped {
+            background: #dc3545;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #0a0e1a;
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-bar .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.5s;
+            border-radius: 3px;
+        }
+        
+        .result-box {
+            background: #0a0e1a;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        
+        .result-box::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .result-box::-webkit-scrollbar-track {
+            background: #0a0e1a;
+        }
+        
+        .result-box::-webkit-scrollbar-thumb {
+            background: #1f2a42;
+            border-radius: 4px;
+        }
+        
+        .result-line {
+            padding: 6px 0;
+            border-bottom: 1px solid #0a0e1a;
+            color: #8892b0;
+        }
+        
+        .result-line.hit {
+            color: #4ade80;
+            font-weight: bold;
+        }
+        
+        .result-line.premium {
+            color: #fbbf24;
+        }
+        
+        .result-line.error {
+            color: #f87171;
+        }
+        
+        .result-line.info {
+            color: #60a5fa;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+        
+        .badge-premium {
+            background: #fbbf24;
+            color: #0a0e1a;
+        }
+        
+        .badge-hit {
+            background: #4ade80;
+            color: #0a0e1a;
+        }
+        
+        .badge-robux {
+            background: #34d399;
+            color: #0a0e1a;
+        }
+        
+        .file-list {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        
+        .file-item {
+            background: #0a0e1a;
+            padding: 10px 15px;
+            border-radius: 6px;
+            border: 1px solid #1f2a42;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .file-item .file-name {
+            color: #e0e0e0;
+        }
+        
+        .file-item .file-size {
+            color: #8892b0;
+            font-size: 0.85em;
+        }
+        
+        .btn-sm {
+            padding: 4px 12px;
+            font-size: 0.85em;
+        }
+        
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 1.8em;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .loading-overlay.active {
+            display: flex;
+        }
+        
+        .loading-content {
+            background: #141b2d;
+            padding: 30px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid #1f2a42;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid #1f2a42;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>⚡ ATX Roblox Checker</h1>
-        
-        <div class="card">
-            <h3>Configuration</h3>
-            <textarea id="combo" rows="5" placeholder="username:password&#10;user2:pass2"></textarea>
-            <br><br>
-            <input type="number" id="threads" value="2" min="1" max="5" style="width: 60px; padding: 5px; background: #0a0e1a; color: #fff; border: 1px solid #1f2a42; border-radius: 4px;">
-            <label>Threads</label>
-            <br><br>
-            <button class="btn-start" onclick="startChecker()">▶ Start</button>
-            <button class="btn-stop" onclick="stopChecker()">⏹ Stop</button>
+        <div class="header">
+            <h1>⚡ ATX Roblox Checker</h1>
+            <p>Check single or multiple accounts instantly</p>
+            <p style="font-size: 0.85em; color: #667eea; margin-top: 5px;">Created by @AntraxdevZ</p>
         </div>
         
-        <div class="card">
-            <h3>Status</h3>
-            <div id="statusText">Stopped</div>
-            <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width: 0%"></div></div>
-            <div class="stat-grid">
-                <div class="stat-item"><div class="stat-value hit" id="hits">0</div><div class="stat-label">Hits</div></div>
-                <div class="stat-item"><div class="stat-value premium" id="premium">0</div><div class="stat-label">Premium</div></div>
-                <div class="stat-item"><div class="stat-value" id="robux">0</div><div class="stat-label">Robux</div></div>
-                <div class="stat-item"><div class="stat-value" id="progress">0%</div><div class="stat-label">Progress</div></div>
+        <div class="grid">
+            <!-- Configuration Card -->
+            <div class="card full-width">
+                <h3>📋 Configuration</h3>
+                <form id="configForm">
+                    <div class="form-group">
+                        <label>Enter Accounts (username:password) - One per line</label>
+                        <textarea id="comboContent" placeholder="username1:password1&#10;username2:password2" required></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Proxy List (optional) - One per line</label>
+                        <textarea id="proxyContent" placeholder="http://proxy1:port&#10;http://proxy2:port" style="min-height: 60px;"></textarea>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Threads</label>
+                            <input type="number" id="threads" value="1" min="1" max="10">
+                        </div>
+                        <div class="form-group">
+                            <label>Min Delay (seconds)</label>
+                            <input type="number" id="minDelay" value="2" min="1" step="0.5">
+                        </div>
+                        <div class="form-group">
+                            <label>Max Delay (seconds)</label>
+                            <input type="number" id="maxDelay" value="5" min="1" step="0.5">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Mode</label>
+                        <select id="mode">
+                            <option value="headless">Headless (Recommended - Server)</option>
+                            <option value="normal">Normal (Visible Browser)</option>
+                            <option value="stealth">Stealth (Anti-Detection)</option>
+                            <option value="rapid">Rapid (Fast)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="btn-group">
+                        <button type="submit" class="btn btn-primary" id="startBtn">▶ Start Checking</button>
+                        <button type="button" class="btn btn-danger" id="stopBtn" disabled>⏹ Stop</button>
+                        <button type="button" class="btn btn-success" id="clearBtn">🗑️ Clear Results</button>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Status Card -->
+            <div class="card">
+                <h3>📊 Status</h3>
+                <div class="status-bar">
+                    <div class="status-indicator">
+                        <span class="status-dot stopped" id="statusDot"></span>
+                        <span id="statusText">Stopped</span>
+                    </div>
+                    <span id="progressText">0 / 0</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-item hit">
+                        <div class="stat-value" id="hits">0</div>
+                        <div class="stat-label">🎯 Hits</div>
+                    </div>
+                    <div class="stat-item premium">
+                        <div class="stat-value" id="premium">0</div>
+                        <div class="stat-label">⭐ Premium</div>
+                    </div>
+                    <div class="stat-item robux">
+                        <div class="stat-value" id="robux">0</div>
+                        <div class="stat-label">💰 Total Robux</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="highValue">0</div>
+                        <div class="stat-label">💎 High Value</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Results Card -->
+            <div class="card">
+                <h3>📝 Results</h3>
+                <div class="result-box" id="resultBox">
+                    <div class="result-line info">Waiting for results...</div>
+                </div>
             </div>
         </div>
         
-        <div class="card">
-            <h3>Results</h3>
-            <div id="results" style="font-size: 12px; max-height: 200px; overflow-y: auto;">Waiting...</div>
-        </div>
-        
-        <div class="card">
-            <h3>Download</h3>
-            <div id="files">No files</div>
+        <!-- Downloads Card -->
+        <div class="card full-width" style="margin-top: 20px;">
+            <h3>📥 Download Results</h3>
+            <div class="file-list" id="fileList">
+                <div style="color: #8892b0; padding: 10px;">No result files available</div>
+            </div>
         </div>
     </div>
     
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <h3 style="color: #e0e0e0;">Checking Accounts...</h3>
+            <p style="color: #8892b0;" id="loadingText">Please wait</p>
+        </div>
+    </div>
+
     <script>
-        async function startChecker() {
-            const combo = document.getElementById('combo').value;
-            if (!combo) { alert('Please enter combos'); return; }
+        let updateInterval = null;
+        let fileListInterval = null;
+        let resultHistory = [];
+        
+        // Add result to display
+        function addResult(text, type = 'info') {
+            const box = document.getElementById('resultBox');
+            const div = document.createElement('div');
+            div.className = `result-line ${type}`;
+            div.textContent = text;
+            box.appendChild(div);
+            box.scrollTop = box.scrollHeight;
+            resultHistory.push({ text, type });
             
-            const data = {
-                combo_content: combo,
-                threads: parseInt(document.getElementById('threads').value) || 2,
-                mode: 'headless',
-                min_delay: 2,
-                max_delay: 5
+            // Keep only last 100 results
+            if (resultHistory.length > 100) {
+                resultHistory.shift();
+                if (box.children.length > 100) {
+                    box.removeChild(box.firstChild);
+                }
+            }
+        }
+        
+        // Clear results
+        function clearResults() {
+            const box = document.getElementById('resultBox');
+            box.innerHTML = '';
+            resultHistory = [];
+            addResult('Cleared. Waiting for new results...', 'info');
+        }
+        
+        async function loadStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                const status = data.status;
+                const isRunning = data.is_running;
+                
+                // Update status indicators
+                const dot = document.getElementById('statusDot');
+                const statusText = document.getElementById('statusText');
+                
+                if (isRunning) {
+                    dot.className = 'status-dot running';
+                    statusText.textContent = 'Running';
+                    document.getElementById('startBtn').disabled = true;
+                    document.getElementById('stopBtn').disabled = false;
+                    document.getElementById('loadingOverlay').classList.add('active');
+                    document.getElementById('loadingText').textContent = `Checking ${status.verified}/${status.total} accounts...`;
+                } else {
+                    dot.className = 'status-dot stopped';
+                    statusText.textContent = 'Stopped';
+                    document.getElementById('startBtn').disabled = false;
+                    document.getElementById('stopBtn').disabled = true;
+                    document.getElementById('loadingOverlay').classList.remove('active');
+                }
+                
+                // Update stats
+                document.getElementById('hits').textContent = status.valid || 0;
+                document.getElementById('premium').textContent = status.premium_accounts || 0;
+                document.getElementById('robux').textContent = (status.total_robux || 0).toLocaleString();
+                document.getElementById('highValue').textContent = status.high_value_accounts || 0;
+                
+                // Update progress
+                const total = status.total || 1;
+                const verified = status.verified || 0;
+                const progress = (verified / total) * 100;
+                
+                document.getElementById('progressFill').style.width = Math.min(progress, 100) + '%';
+                document.getElementById('progressText').textContent = `${verified} / ${total}`;
+                
+                // Update recent results
+                const results = status.recent_results || [];
+                if (results.length > 0) {
+                    // Only add new results that aren't already shown
+                    const lastResult = results[results.length - 1];
+                    const existingResults = resultHistory.map(r => r.text);
+                    for (const result of results) {
+                        if (!existingResults.includes(result)) {
+                            const isHit = result.includes('[HIT]');
+                            const isPremium = result.includes('PREMIUM');
+                            const isWrong = result.includes('[WRONG]');
+                            const type = isHit ? 'hit' : isWrong ? 'error' : 'info';
+                            const premiumClass = isPremium ? 'premium' : '';
+                            addResult(result, type);
+                        }
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Error loading status:', error);
+            }
+        }
+        
+        async function loadFileList() {
+            try {
+                const response = await fetch('/api/files');
+                const data = await response.json();
+                
+                const fileList = document.getElementById('fileList');
+                
+                if (!data.files || data.files.length === 0) {
+                    fileList.innerHTML = `<div style="color: #8892b0; padding: 10px;">No result files available</div>`;
+                    return;
+                }
+                
+                fileList.innerHTML = data.files.map(file => {
+                    const size = (file.size / 1024).toFixed(1);
+                    return `
+                        <div class="file-item">
+                            <span class="file-name">📄 ${file.name}</span>
+                            <span class="file-size">(${size} KB)</span>
+                            <a href="/api/download/${file.name}" class="btn btn-success btn-sm" download>Download</a>
+                        </div>
+                    `;
+                }).join('');
+                
+            } catch (error) {
+                console.error('Error loading file list:', error);
+            }
+        }
+        
+        document.getElementById('configForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const comboContent = document.getElementById('comboContent').value.trim();
+            if (!comboContent) {
+                alert('Please enter at least one account (username:password)');
+                return;
+            }
+            
+            // Check if it's a single combo
+            const lines = comboContent.split('\n').filter(line => line.trim());
+            if (lines.length === 1) {
+                addResult(`🔍 Checking single account: ${lines[0]}`, 'info');
+            } else {
+                addResult(`🔍 Checking ${lines.length} accounts...`, 'info');
+            }
+            
+            const config = {
+                combo_content: comboContent,
+                proxy_content: document.getElementById('proxyContent').value.trim(),
+                threads: parseInt(document.getElementById('threads').value) || 1,
+                min_delay: parseFloat(document.getElementById('minDelay').value) || 2,
+                max_delay: parseFloat(document.getElementById('maxDelay').value) || 5,
+                mode: document.getElementById('mode').value
             };
             
-            const response = await fetch('/api/start', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(data)
-            });
-            const result = await response.json();
-            alert(result.success ? '✅ Checker started!' : '❌ Error: ' + result.error);
-            if (result.success) updateStatus();
-        }
+            try {
+                const response = await fetch('/api/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(config)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addResult(`✅ Checker started! Total accounts: ${data.total_accounts}`, 'hit');
+                    
+                    // Start updating status
+                    if (updateInterval) clearInterval(updateInterval);
+                    if (fileListInterval) clearInterval(fileListInterval);
+                    
+                    updateInterval = setInterval(loadStatus, 2000);
+                    fileListInterval = setInterval(loadFileList, 5000);
+                    
+                    loadStatus();
+                    loadFileList();
+                } else {
+                    addResult(`❌ Error: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                addResult(`❌ Error: ${error.message}`, 'error');
+            }
+        });
         
-        async function stopChecker() {
-            const response = await fetch('/api/stop', { method: 'POST' });
-            const result = await response.json();
-            alert(result.success ? '⏹ Checker stopped' : '❌ Error');
-        }
+        document.getElementById('stopBtn').addEventListener('click', async () => {
+            if (!confirm('Are you sure you want to stop the checker?')) return;
+            
+            try {
+                const response = await fetch('/api/stop', {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addResult('⏹ Checker stopped', 'info');
+                    loadStatus();
+                } else {
+                    addResult(`❌ Error: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                addResult(`❌ Error: ${error.message}`, 'error');
+            }
+        });
         
-        async function updateStatus() {
-            const response = await fetch('/api/status');
-            const data = await response.json();
-            
-            const s = data.status;
-            document.getElementById('statusText').textContent = data.is_running ? '🟢 Running' : '🔴 Stopped';
-            document.getElementById('hits').textContent = s.valid || 0;
-            document.getElementById('premium').textContent = s.premium_accounts || 0;
-            document.getElementById('robux').textContent = (s.total_robux || 0).toLocaleString();
-            
-            const progress = s.total > 0 ? Math.round((s.verified / s.total) * 100) : 0;
-            document.getElementById('progress').textContent = progress + '%';
-            document.getElementById('progressFill').style.width = progress + '%';
-            
-            // Results
-            const results = s.recent_results || [];
-            document.getElementById('results').innerHTML = results.length ? 
-                results.map(r => `<div>${r}</div>`).join('') : 
-                'No results yet';
-            
-            // Files
-            const filesResp = await fetch('/api/files');
-            const filesData = await filesResp.json();
-            const files = filesData.files || [];
-            document.getElementById('files').innerHTML = files.length ? 
-                files.map(f => `<a href="/api/download/${f.name}" download>📄 ${f.name}</a>`).join(' | ') : 
-                'No files';
-        }
+        document.getElementById('clearBtn').addEventListener('click', clearResults);
+        
+        // Load initial status
+        loadStatus();
+        loadFileList();
         
         // Auto-refresh
-        setInterval(updateStatus, 3000);
-        updateStatus();
+        setInterval(loadStatus, 3000);
+        setInterval(loadFileList, 10000);
+        
+        // Auto-check if single combo is pasted
+        document.getElementById('comboContent').addEventListener('paste', function() {
+            const lines = this.value.split('\n').filter(line => line.trim());
+            if (lines.length === 1 && lines[0].includes(':')) {
+                addResult(`📋 Single combo detected: ${lines[0]}`, 'info');
+            }
+        });
     </script>
 </body>
 </html>

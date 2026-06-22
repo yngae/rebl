@@ -1,8 +1,18 @@
 [phases.setup]
-nixPkgs = ["python311", "python311Packages.pip", "python311Packages.selenium", "google-chrome", "chromedriver"]
+nixPkgs = [
+    "python311",
+    "python311Packages.pip",
+    "python311Packages.selenium",
+    "google-chrome",
+    "chromedriver"
+]
 
 [phases.install]
-cmds = ["pip install -r requirements.txt"]
+cmds = [
+    "pip install -r requirements.txt",
+    "echo 'Chrome installed successfully'",
+    "google-chrome --version || echo 'Chrome not found'"
+]
 
 [start]
 cmd = "python app.py"

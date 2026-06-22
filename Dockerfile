@@ -1,4 +1,4 @@
-# Dockerfile - Updated for modern Debian
+# Dockerfile - Fixed ChromeDriver extraction
 FROM python:3.10-slim
 
 # Install Chrome and dependencies
@@ -10,24 +10,24 @@ RUN apt-get update && apt-get install -y \
     xvfb \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Chrome using the new method (without apt-key)
+# Install Chrome using the new method
 RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor > /usr/share/keyrings/google-chrome.gpg \
     && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
     && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
-# Install ChromeDriver
+# Install ChromeDriver - FIXED: handle the extracted folder
 RUN wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/120.0.6099.109/linux64/chromedriver-linux64.zip" \
     && unzip chromedriver-linux64.zip \
-    && chmod +x chromedriver \
-    && mv chromedriver /usr/local/bin/ \
-    && rm chromedriver-linux64.zip
+    && chmod +x chromedriver-linux64/chromedriver \
+    && mv chromedriver-linux64/chromedriver /usr/local/bin/ \
+    && rm -rf chromedriver-linux64.zip chromedriver-linux64
 
 # Set working directory
 WORKDIR /app
 
-# Copy requirements first (for better caching)
+# Copy requirements first
 COPY requirements.txt .
 
 # Install Python dependencies

@@ -1,4 +1,4 @@
-# app.py - Railway Edition for Roblox Account Checker
+# app.py - Railway Edition with Debug Mode for Roblox Account Checker
 
 import os
 import sys
@@ -15,8 +15,9 @@ from flask_socketio import SocketIO, emit
 # Import the original checker
 try:
     from wf import AntraxRblxChecker, Account
+    print("[+] ✅ Successfully loaded AntraxRblxChecker from wf.py")
 except ImportError as e:
-    print(f"[-] Error importing from wf.py: {e}")
+    print(f"[-] ❌ Error importing from wf.py: {e}")
     print("[!] Make sure wf.py is in the same directory")
     sys.exit(1)
 
@@ -34,10 +35,12 @@ socketio = SocketIO(
     ping_timeout=60,
     ping_interval=25,
     max_http_buffer_size=1e6,
-    logger=False,
-    engineio_logger=False,
+    logger=True,  # Enable logging for debugging
+    engineio_logger=True,  # Enable engine.io logging for debugging
     manage_session=False
 )
+
+print("[+] 🔌 SocketIO configured with debug logging")
 
 # Global state
 checker_state = {
@@ -83,19 +86,24 @@ def add_log(message, level='info'):
     if len(checker_state['logs']) > 500:
         checker_state['logs'].pop(0)
     
+    # Also print to console for debugging
+    print(f"[{log_entry['time']}] [{level.upper()}] {message}")
+    
     try:
         socketio.emit('log', log_entry)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[!] Failed to emit log: {e}")
 
 def emit_socket_event(event, data):
     try:
         socketio.emit(event, data)
-    except Exception:
-        pass
+        print(f"[DEBUG] Emitted {event}: {str(data)[:100]}...")
+    except Exception as e:
+        print(f"[!] Failed to emit {event}: {e}")
 
 @app.route('/')
 def index():
+    print("[DEBUG] Serving index page")
     return render_template('index.html')
 
 @app.route('/static/<path:path>')
@@ -104,7 +112,7 @@ def serve_static(path):
 
 @app.route('/api/status')
 def get_status():
-    return jsonify({
+    status_data = {
         'running': checker_state['running'],
         'paused': checker_state['paused'],
         'stats': checker_state['stats'],
@@ -112,23 +120,33 @@ def get_status():
         'total_accounts': checker_state['total_accounts'],
         'current_account': checker_state['current_account'],
         'hits': checker_state['hits'][-50:]
-    })
+    }
+    print(f"[DEBUG] Status requested - Running: {checker_state['running']}, Verified: {checker_state['stats']['verified']}")
+    return jsonify(status_data)
 
 @app.route('/api/start', methods=['POST'])
 def start_checker():
     global checker, work_queue
     
+    print("[DEBUG] Start request received")
+    
     if checker_state['running']:
+        print("[DEBUG] Checker already running")
         return jsonify({'error': 'Checker already running'}), 400
     
     data = request.json
+    print(f"[DEBUG] Request data: {data.keys() if data else 'None'}")
+    
     combo_text = data.get('combo', '')
     proxy_text = data.get('proxies', '')
     threads = int(data.get('threads', 2))
     min_delay = float(data.get('min_delay', 10))
     max_delay = float(data.get('max_delay', 20))
     
+    print(f"[DEBUG] Config: threads={threads}, min_delay={min_delay}, max_delay={max_delay}")
+    
     if not combo_text:
+        print("[DEBUG] No accounts provided")
         return jsonify({'error': 'No accounts provided'}), 400
     
     # Parse accounts
@@ -143,7 +161,10 @@ def start_checker():
                     password=parts[1].strip()
                 ))
     
+    print(f"[DEBUG] Parsed {len(accounts)} accounts")
+    
     if not accounts:
+        print("[DEBUG] No valid accounts found")
         return jsonify({'error': 'No valid accounts found (format: user:pass)'}), 400
     
     # Parse proxies
@@ -154,7 +175,10 @@ def start_checker():
             if line and not line.startswith('#'):
                 proxies.append(line)
     
+    print(f"[DEBUG] Parsed {len(proxies)} proxies")
+    
     # Create checker instance (uses the original AntraxRblxChecker)
+    print("[DEBUG] Creating AntraxRblxChecker instance...")
     checker = AntraxRblxChecker()
     checker.accounts = accounts
     checker.min_delay = min_delay
@@ -164,10 +188,13 @@ def start_checker():
     checker.max_workers = max_workers
     checker.max_accounts_per_test = len(accounts)
     
+    print(f"[DEBUG] Checker created with {max_workers} workers")
+    
     # Add proxies if provided
     if proxies:
         checker.proxy_manager.proxies = proxies
         checker.proxy_manager.active_proxies = proxies.copy()
+        print(f"[DEBUG] Added {len(proxies)} proxies to checker")
     
     # Reset state
     checker_state['running'] = True
@@ -196,6 +223,8 @@ def start_checker():
     }
     checker_state['total_accounts'] = len(accounts)
     
+    print("[DEBUG] State reset, starting workers...")
+    
     # Start worker threads
     work_queue = queue.Queue()
     for account in accounts:
@@ -208,10 +237,12 @@ def start_checker():
             daemon=True
         )
         w.start()
+        print(f"[DEBUG] Worker {i+1} started")
     
     # Start monitoring thread
     monitor_thread = threading.Thread(target=monitor_progress, args=(len(accounts),), daemon=True)
     monitor_thread.start()
+    print("[DEBUG] Monitor thread started")
     
     add_log(f'🚀 Checker started with {len(accounts)} accounts and {len(proxies)} proxies', 'success')
     add_log(f'⚙️ Using {max_workers} workers (limited for Railway)', 'info')
@@ -225,6 +256,8 @@ def start_checker():
 
 def checker_worker(worker_id, work_queue):
     """Worker thread using the original checker's verify_account method"""
+    print(f"[DEBUG] Worker {worker_id} started")
+    
     while checker_state['running'] and not work_queue.empty():
         try:
             # Check if paused
@@ -240,9 +273,17 @@ def checker_worker(worker_id, work_queue):
                 break
                 
             checker_state['current_account'] = account.username
+            print(f"[DEBUG] Worker {worker_id} processing: {account.username}")
             
             # Use the original verify_account method from wf.py
-            verified_account = checker.verify_account(account, worker_id)
+            try:
+                verified_account = checker.verify_account(account, worker_id)
+                print(f"[DEBUG] Worker {worker_id} result for {account.username}: {verified_account.status}")
+            except Exception as e:
+                print(f"[ERROR] Worker {worker_id} verify_account failed: {e}")
+                verified_account = account
+                verified_account.status = "error"
+                verified_account.message = str(e)[:100]
             
             # Update stats
             stats = checker_state['stats']
@@ -286,6 +327,7 @@ def checker_worker(worker_id, work_queue):
                 }
                 checker_state['hits'].append(hit_data)
                 emit_socket_event('hit', hit_data)
+                print(f"[HIT] Worker {worker_id}: {verified_account.username} - R${verified_account.robux} {'PREMIUM' if verified_account.premium else ''}")
             
             # Add to recent results
             result_line = {
@@ -321,6 +363,7 @@ def checker_worker(worker_id, work_queue):
             # Delay between checks (using the checker's delay settings)
             if checker_state['running']:
                 delay = random.uniform(checker.min_delay, checker.max_delay)
+                print(f"[DEBUG] Worker {worker_id} sleeping for {delay:.2f}s")
                 time.sleep(delay)
             
             work_queue.task_done()
@@ -328,14 +371,19 @@ def checker_worker(worker_id, work_queue):
         except queue.Empty:
             break
         except Exception as e:
+            print(f"[ERROR] Worker {worker_id} error: {e}")
             add_log(f'Error in worker {worker_id}: {str(e)}', 'error')
             try:
                 work_queue.task_done()
             except:
                 pass
+    
+    print(f"[DEBUG] Worker {worker_id} finished")
 
 def monitor_progress(total):
     """Monitor and emit progress updates"""
+    print("[DEBUG] Monitor started")
+    
     while checker_state['running']:
         try:
             stats = checker_state['stats']
@@ -359,10 +407,15 @@ def monitor_progress(total):
                 'elapsed': round(elapsed, 0)
             }
             
+            # Print progress every 10 seconds for debugging
+            if int(elapsed) % 10 == 0:
+                print(f"[PROGRESS] {stats['verified']}/{total} verified, {stats['valid']} hits, {speed:.1f}/min")
+            
             emit_socket_event('progress', progress_data)
             
             if stats['verified'] >= total and total > 0:
                 checker_state['running'] = False
+                print("[PROGRESS] All accounts verified!")
                 add_log('✅ All accounts verified!', 'success')
                 emit_socket_event('complete', {'message': 'All accounts verified!'})
                 break
@@ -370,11 +423,15 @@ def monitor_progress(total):
             time.sleep(1)
             
         except Exception as e:
+            print(f"[ERROR] Monitor error: {e}")
             add_log(f'Monitor error: {str(e)}', 'error')
             time.sleep(1)
+    
+    print("[DEBUG] Monitor finished")
 
 @app.route('/api/stop', methods=['POST'])
 def stop_checker():
+    print("[DEBUG] Stop request received")
     checker_state['running'] = False
     if checker:
         checker.running = False
@@ -383,6 +440,7 @@ def stop_checker():
 
 @app.route('/api/pause', methods=['POST'])
 def pause_checker():
+    print("[DEBUG] Pause request received")
     checker_state['paused'] = True
     if checker:
         checker.paused = True
@@ -391,6 +449,7 @@ def pause_checker():
 
 @app.route('/api/resume', methods=['POST'])
 def resume_checker():
+    print("[DEBUG] Resume request received")
     checker_state['paused'] = False
     if checker:
         checker.paused = False
@@ -399,6 +458,7 @@ def resume_checker():
 
 @app.route('/api/clear', methods=['POST'])
 def clear_results():
+    print("[DEBUG] Clear results request received")
     checker_state['hits'] = []
     checker_state['recent_results'] = []
     checker_state['logs'] = []
@@ -414,25 +474,55 @@ def health_check():
         'timestamp': datetime.now().isoformat()
     })
 
+@app.route('/debug')
+def debug_info():
+    """Debug endpoint to check application state"""
+    return jsonify({
+        'running': checker_state['running'],
+        'paused': checker_state['paused'],
+        'total_accounts': checker_state['total_accounts'],
+        'verified': checker_state['stats']['verified'],
+        'valid': checker_state['stats']['valid'],
+        'premium': checker_state['stats']['premium_accounts'],
+        'total_robux': checker_state['stats']['total_robux'],
+        'current_account': checker_state['current_account'],
+        'logs_count': len(checker_state['logs']),
+        'hits_count': len(checker_state['hits']),
+        'workers': checker.max_workers if checker else 0,
+        'proxies': len(checker.proxy_manager.active_proxies) if checker and checker.proxy_manager else 0
+    })
+
 @socketio.on('connect')
 def handle_connect():
+    print(f"[SOCKET] Client connected: {request.sid}")
     emit('connected', {'status': 'connected', 'timestamp': datetime.now().isoformat()})
     add_log('📡 Client connected', 'info')
 
 @socketio.on('disconnect')
 def handle_disconnect():
+    print(f"[SOCKET] Client disconnected: {request.sid}")
     add_log('📡 Client disconnected', 'info')
+
+@socketio.on('ping')
+def handle_ping():
+    print(f"[SOCKET] Ping from {request.sid}")
+    emit('pong', {'timestamp': datetime.now().isoformat()})
 
 # Error handlers
 @app.errorhandler(404)
 def not_found(e):
+    print(f"[ERROR] 404: {e}")
     return jsonify({'error': 'Not found'}), 404
 
 @app.errorhandler(500)
 def server_error(e):
+    print(f"[ERROR] 500: {e}")
     return jsonify({'error': 'Server error'}), 500
 
 if __name__ == '__main__':
+    print("=" * 70)
+    print("   ATX ROBLOX CHECKER - RAILWAY EDITION (DEBUG MODE)")
+    print("=" * 70)
     print("[+] ✅ Successfully loaded AntraxRblxChecker from wf.py")
     
     # Get port from environment variable (Railway sets this)
@@ -441,17 +531,19 @@ if __name__ == '__main__':
     print("[+] 🚀 Starting Roblox Account Checker on Railway")
     print(f"[+] 🌐 Running on port {port}")
     print("[+] 📊 Using original AntraxRblxChecker engine")
-    print("[+] ⚡ Railway-optimized configuration")
+    print("[+] ⚡ Railway-optimized configuration with debug logging")
+    print("[+] 🔍 Debug mode ENABLED - All actions will be logged")
+    print("=" * 70)
     
-    # Run with eventlet for production (removed allow_unsafe_werkzeug)
+    # Run with eventlet for production
     try:
         socketio.run(
             app,
             host='0.0.0.0',
             port=port,
-            debug=False,
-            use_reloader=False,
-            log_output=False
+            debug=True,  # Enable debug mode
+            use_reloader=False,  # Disable reloader for Railway
+            log_output=True  # Enable log output
         )
     except TypeError:
         # Fallback for older versions
@@ -459,6 +551,6 @@ if __name__ == '__main__':
             app,
             host='0.0.0.0',
             port=port,
-            debug=False,
+            debug=True,
             use_reloader=False
         )

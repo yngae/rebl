@@ -5,3 +5,4 @@ eventlet
 selenium
 requests
 webdriver-manager
+undetected-chromedriver

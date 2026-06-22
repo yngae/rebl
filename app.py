@@ -1,4 +1,4 @@
-# app.py - Complete fixed version for Railway
+# app.py - Flask web server for Railway
 import os
 import sys
 import json
@@ -12,18 +12,10 @@ import traceback
 
 # Setup logging
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-# Fix distutils for Python 3.12+
-try:
-    import distutils
-except ImportError:
-    import types
-    distutils = types.ModuleType('distutils')
-    sys.modules['distutils'] = distutils
 
 # Import checker
 try:
@@ -38,16 +30,19 @@ except ImportError as e:
             self.web_results = []
             self.accounts = []
             self.running = True
-        def load_accounts(self, path): 
-            return False
-        def load_proxies(self, path): 
-            return False
-        def start_verification_simple(self): 
-            self.web_results.append("Checker not available")
-        def start_verification(self): 
-            self.web_results.append("Checker not available")
+            self.mode = None
+            self.min_delay = 5
+            self.max_delay = 10
+            self.max_workers = 2
+            self.max_accounts_per_test = 999999
+        def load_accounts(self, path): return False
+        def load_proxies(self, path): return False
+        def start_verification_simple(self): pass
     class VerificationMode:
         HEADLESS = "headless"
+        NORMAL = "normal"
+        STEALTH = "stealth"
+        RAPID = "rapid"
     class Account:
         pass
 
@@ -134,7 +129,6 @@ def get_status():
         })
     except Exception as e:
         logger.error(f"Status error: {e}")
-        logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/start', methods=['POST'])
@@ -158,23 +152,25 @@ def start_checker():
         with open(combo_path, 'w', encoding='utf-8') as f:
             f.write(combo_content)
         
-        # Import checker
-        try:
-            from checker import AntraxRblxChecker, VerificationMode
-        except ImportError as e:
-            logger.error(f"Checker import failed: {e}")
-            return jsonify({'error': f'Checker module not available: {str(e)}'}), 500
-        
         # Create checker instance
+        from checker import AntraxRblxChecker, VerificationMode
         checker_instance = AntraxRblxChecker()
         
-        # Configure - Force headless mode
-        checker_instance.mode = VerificationMode.HEADLESS
-        checker_instance.max_workers = int(data.get('threads', 1))
-        checker_instance.min_delay = float(data.get('min_delay', 2))
-        checker_instance.max_delay = float(data.get('max_delay', 3))
+        # Configure
+        mode = data.get('mode', 'normal')
+        if mode == 'headless':
+            checker_instance.mode = VerificationMode.HEADLESS
+        elif mode == 'stealth':
+            checker_instance.mode = VerificationMode.STEALTH
+        elif mode == 'rapid':
+            checker_instance.mode = VerificationMode.RAPID
+        # else: keep NORMAL (default)
         
-        logger.info(f"Configured: threads={checker_instance.max_workers}, delay={checker_instance.min_delay}-{checker_instance.max_delay}s")
+        checker_instance.max_workers = int(data.get('threads', 1))
+        checker_instance.min_delay = float(data.get('min_delay', 3))
+        checker_instance.max_delay = float(data.get('max_delay', 5))
+        
+        logger.info(f"Configured: mode={checker_instance.mode.value}, threads={checker_instance.max_workers}, delay={checker_instance.min_delay}-{checker_instance.max_delay}s")
         
         # Load accounts
         if not checker_instance.load_accounts(combo_path):
@@ -243,31 +239,6 @@ def stop_checker():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/results', methods=['GET'])
-def get_results():
-    global checker_instance
-    
-    try:
-        if checker_instance and hasattr(checker_instance, 'web_results'):
-            return jsonify({
-                'results': checker_instance.web_results[-100:],
-                'total': len(checker_instance.web_results)
-            })
-        return jsonify({'results': [], 'total': 0})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/clear', methods=['POST'])
-def clear_results():
-    global checker_instance
-    
-    try:
-        if checker_instance and hasattr(checker_instance, 'web_results'):
-            checker_instance.web_results = []
-        return jsonify({'success': True, 'message': 'Results cleared'})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/api/files', methods=['GET'])
 def list_files():
     try:
@@ -301,30 +272,20 @@ def download_file(filename):
     return jsonify({'error': 'File not found'}), 404
 
 def run_checker_thread():
-    """Run checker in background thread"""
     global checker_instance, is_running
-    
-    logger.info("Run checker thread started")
     
     try:
         if checker_instance:
-            logger.info("Checking if start_verification_simple exists")
             if hasattr(checker_instance, 'start_verification_simple'):
-                logger.info("Calling start_verification_simple")
                 checker_instance.start_verification_simple()
-                logger.info("start_verification_simple completed")
             else:
-                logger.warning("start_verification_simple not found, using start_verification")
                 checker_instance.start_verification()
             logger.info("Checker verification completed")
-        else:
-            logger.error("No checker instance")
     except Exception as e:
         logger.error(f"Checker thread error: {e}")
         logger.error(traceback.format_exc())
     finally:
         is_running = False
-        logger.info("Checker thread stopped")
         if checker_instance and hasattr(checker_instance, 'driver_manager'):
             try:
                 checker_instance.driver_manager.cleanup_drivers()

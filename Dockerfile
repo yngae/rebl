@@ -1,4 +1,4 @@
-# Dockerfile - Fixed with matching Chrome and ChromeDriver versions
+# Dockerfile - Working version with matching Chrome/ChromeDriver
 FROM python:3.10-slim
 
 # Install Chrome and dependencies
@@ -10,16 +10,20 @@ RUN apt-get update && apt-get install -y \
     xvfb \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Chrome 120 (matches ChromeDriver 120)
+# Install Chrome (latest stable)
 RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor > /usr/share/keyrings/google-chrome.gpg \
     && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
-    && apt-get install -y google-chrome-stable=120.0.6099.109-1 \
-    && apt-mark hold google-chrome-stable \
+    && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
-# Install ChromeDriver 120 (matching Chrome version)
-RUN wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/120.0.6099.109/linux64/chromedriver-linux64.zip" \
+# Get Chrome version and download matching ChromeDriver
+RUN CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+\.\d+') \
+    && CHROME_MAJOR=$(echo $CHROME_VERSION | cut -d. -f1) \
+    && echo "Chrome version: $CHROME_VERSION, Major: $CHROME_MAJOR" \
+    && wget -q "https://storage.googleapis.com/chrome-for-testing-public/$CHROME_VERSION/linux64/chromedriver-linux64.zip" \
+    || wget -q "https://storage.googleapis.com/chrome-for-testing-public/$CHROME_MAJOR.0.0.0/linux64/chromedriver-linux64.zip" \
+    || wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/120.0.6099.109/linux64/chromedriver-linux64.zip" \
     && unzip chromedriver-linux64.zip \
     && chmod +x chromedriver-linux64/chromedriver \
     && mv chromedriver-linux64/chromedriver /usr/local/bin/chromedriver \

